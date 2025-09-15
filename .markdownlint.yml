@@ -1,0 +1,19 @@
+# Enable default rules and set a stricter line length
+default: true
+
+# MD013: Line length
+MD013:
+  line_length: 80
+  code_blocks: false   # allow long lines in fenced code blocks
+  tables: false        # allow long lines in tables
+
+# MD009: No trailing spaces at end of lines
+MD009:
+  br_spaces: 0         # disallow hard line break spaces
+  strict: true         # flag any trailing whitespace
+
+# MD029: Disable ordered list item prefix checking
+MD029: false           # allow sequential numbering (1, 2, 3, 4)
+
+# MD047: Files should end with a single newline character
+MD047: true

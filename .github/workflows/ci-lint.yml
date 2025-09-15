@@ -1,0 +1,80 @@
+# NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
+name: ci-lint
+
+# Trigger the workflow when:
+on:
+  # A push occurs to one of the matched branches.
+  push:
+    branches:
+      - main
+      - master
+      - stable/*
+  # Or when a pull request event occurs for a pull request against one of the
+  # matched branches.
+  pull_request:
+    branches:
+      - main
+      - master
+      - stable/*
+
+# Cancel in-progress jobs on same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_POLICY_VERSION_MINIMUM: 3.5
+
+jobs:
+  lint-markdown:
+    name: lint-markdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint markdown
+        uses: nosborn/github-action-markdown-cli@v3.3.0
+        with:
+          files: .
+          config_file: .markdownlint.yml
+          ignore_path: .markdownlintignore
+
+  lint-paymaster-relayer:
+    name: lint-paymaster-relayer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python and uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: ./paymaster-relayer
+        run: uv sync --dev
+
+      - name: Lint Python code
+        working-directory: ./paymaster-relayer
+        run: uv run ruff check --output-format=github .
+
+  lint-solidity:
+    name: lint-solidity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        working-directory: ./contracts
+        run: bun install
+
+      - name: Lint Solidity code
+        working-directory: ./contracts
+        run: bun run lint

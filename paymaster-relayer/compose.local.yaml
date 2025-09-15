@@ -1,0 +1,28 @@
+services:
+  rofl-relayer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/rube-de/paymaster-relayer:latest
+    platform: linux/amd64
+    container_name: paymaster_relayer_local
+    entrypoint: /bin/sh -c 'uv run python -m paymaster_relayer --local'
+    env_file:
+      - .env
+    environment:
+      # Python configuration
+      PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility
+      
+      # Source chain configuration (Ethereum/Base Sepolia)
+      SOURCE_RPC_URL: ${SOURCE_RPC_URL:-}  # Required - Source chain RPC endpoint
+      PAYMASTER_VAULT_ADDRESS: ${PAYMASTER_VAULT_ADDRESS:-}  # Required - PaymasterVault contract address
+      
+      # Target chain configuration (Oasis Sapphire)
+      TARGET_RPC_URL: ${TARGET_RPC_URL:-https://testnet.sapphire.oasis.io}  # Required - Oasis RPC endpoint
+      PAYMASTER_PROXY_ADDRESS: ${PAYMASTER_PROXY_ADDRESS:-}  # Required - CrossChainPaymaster contract address
+      ROFL_ADAPTER_ADDRESS: ${ROFL_ADAPTER_ADDRESS:-}  # Required - ROFLAdapter for HashStored
+      
+      # Local mode configuration (for testing without ROFL)
+      PRIVATE_KEY: ${PRIVATE_KEY:-}  # Required in local mode - private key for transactions
+    
+    restart: on-failure
