@@ -1,0 +1,24 @@
+services:
+  rofl-relayer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/rube-de/paymaster-relayer:latest
+    platform: linux/amd64
+    container_name: paymaster_relayer
+    environment:
+      # Python configuration
+      PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility
+      
+      # Source chain configuration (Ethereum Sepolia)
+      SOURCE_RPC_URL: ${SOURCE_RPC_URL:-}  # Required - Source chain RPC endpoint
+      PAYMASTER_VAULT_ADDRESS: ${PAYMASTER_VAULT_ADDRESS:-}  # Required - PaymasterVault contract address
+      
+      # Target chain configuration (Oasis Sapphire)
+      TARGET_RPC_URL: ${TARGET_RPC_URL:-https://testnet.sapphire.oasis.io}
+      PAYMASTER_PROXY_ADDRESS: ${PAYMASTER_PROXY_ADDRESS:-}  # Required - CrossChainPaymaster contract address
+      ROFL_ADAPTER_ADDRESS: ${ROFL_ADAPTER_ADDRESS:-}  # Required - ROFLAdapter for HashStored
+    
+    restart: on-failure
+    volumes:
+      - /run/rofl-appd.sock:/run/rofl-appd.sock

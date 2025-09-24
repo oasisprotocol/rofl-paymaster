@@ -1,0 +1,43 @@
+# NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
+name: ci-build
+
+# Trigger the workflow when:
+on:
+  # A push occurs to one of the matched branches.
+  push:
+    branches:
+      - main
+      - master
+      - stable/*
+  # Or when a pull request event occurs for a pull request against one of the
+  # matched branches.
+  pull_request:
+    branches:
+      - main
+      - master
+      - stable/*
+
+# Cancel in-progress jobs on same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_POLICY_VERSION_MINIMUM: 3.5
+
+jobs:
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Show Docker and Compose versions
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Build images with Docker Compose
+        working-directory: ./paymaster-relayer
+        run: docker compose build
