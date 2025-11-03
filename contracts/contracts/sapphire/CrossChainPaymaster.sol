@@ -1,56 +1,62 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import { RLPReader } from "@eth-optimism/contracts-bedrock/src/libraries/rlp/RLPReader.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {ICrossChainPaymaster} from "./interfaces/ICrossChainPaymaster.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {SapphireTypes} from "./libraries/SapphireTypes.sol";
 
-import { HashiProverUpgradeable } from "../hashi/prover/HashiProverUpgradeable.sol";
-import { ReceiptProof } from "../hashi/prover/HashiProverStructs.sol";
-
-import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import { ICrossChainPaymaster } from "./interfaces/ICrossChainPaymaster.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { SapphireTypes } from "./libraries/SapphireTypes.sol";
+/**
+ * @notice Interface for the Accounting contract
+ */
+interface IAccounting {
+    function balances(
+        address user,
+        bytes32 tokenId
+    ) external view returns (uint256);
+    function transferFromLock(
+        address userAddress,
+        address toAddress,
+        uint256 lockIndex,
+        uint256 amount,
+        bytes calldata signature
+    ) external;
+}
 
 /**
  * @title CrossChainPaymaster
  * @author Oasis Protocol Foundation
- * @notice Sapphire contract that verifies remote PaymentInitiated events via Hashi and distributes ROSE
- * @dev UUPS upgradeable. Uses ROFL price oracle for conversions. Duplicate prevention via paymentId.
+ * @notice Sapphire contract that converts between ROSE and other tokens using Accounting module
+ * @dev UUPS upgradeable. Handles inbound deposits (token -> ROSE) and outbound withdrawals (ROSE -> token).
  */
 contract CrossChainPaymaster is
     Initializable,
     UUPSUpgradeable,
     PausableUpgradeable,
     ReentrancyGuardUpgradeable,
-    HashiProverUpgradeable,
+    OwnableUpgradeable,
     ICrossChainPaymaster
 {
-    using RLPReader for RLPReader.RLPItem;
-    using RLPReader for bytes;
-
-    // ---------------------------------------------------------------------
-    // Constants
-    // ---------------------------------------------------------------------
-    bytes32 internal constant PAYMENT_INITIATED_TOPIC = keccak256(
-        abi.encodePacked(
-            "PaymentInitiated(address,address,address,uint256,bytes32)"
-        )
-    );
-
     // ---------------------------------------------------------------------
     // Storage
     // ---------------------------------------------------------------------
 
     /**
-     * @notice USD price feeds for tokens (token => Chainlink AggregatorV3Interface)
+     * @notice Accounting contract that manages cross-chain balances
+     */
+    IAccounting public accounting;
+
+    /**
+     * @notice USD price feeds for tokens (tokenId => Chainlink AggregatorV3Interface)
      * @dev Each feed should report TOKEN/USD (USD per 1 TOKEN) with its own decimals.
      */
-    mapping(address => AggregatorV3Interface) public priceFeeds;
+    mapping(bytes32 => AggregatorV3Interface) public priceFeeds;
 
     /**
      * @notice ROSE/USD price feed (USD per 1 ROSE)
@@ -58,29 +64,14 @@ contract CrossChainPaymaster is
     AggregatorV3Interface public roseUsdFeed;
 
     /**
-     * @notice Token decimal mappings (token => decimals)
+     * @notice Token decimal mappings (tokenId => decimals)
      */
-    mapping(address => uint8) public tokenDecimals;
+    mapping(bytes32 => uint8) public tokenDecimals;
 
     /**
      * @notice Staleness threshold for price feeds (in seconds)
      */
     uint256 public stalenessThreshold;
-
-    /**
-     * @notice Duplicate prevention mapping (paymentId => processed)
-     */
-    mapping(bytes32 => bool) public processedPayments;
-
-    /**
-     * @notice Chain configuration (chainId => config)
-     */
-    mapping(uint256 => SapphireTypes.ChainConfig) public chainConfigs;
-
-    /**
-     * @notice Authorized source vaults per chain
-     */
-    mapping(uint256 => mapping(address => bool)) public isAuthorizedVault;
 
     /**
      * @notice Distribution limits and counters
@@ -92,56 +83,76 @@ contract CrossChainPaymaster is
     // ---------------------------------------------------------------------
 
     /**
-     * @notice Initializes the contract with owner and distribution limits
+     * @notice Initializes the contract with owner, accounting, and distribution limits
      * @param _owner Address to transfer ownership to
-     * @param _shoyuBashi Hashi ShoyuBashi contract address
+     * @param _accounting Accounting contract address
      * @param _limits Distribution limits for payments
      * @param _stalenessThreshold Maximum age for price data in seconds
      * @param _roseUsdFeed Chainlink Aggregator for ROSE/USD
      */
     function initialize(
         address _owner,
-        address _shoyuBashi,
+        address _accounting,
         SapphireTypes.DistributionLimits memory _limits,
         uint256 _stalenessThreshold,
         address _roseUsdFeed
     ) external initializer {
         __ReentrancyGuard_init();
-        __HashiProverUpgradeable_init(_shoyuBashi);
         __Pausable_init();
         __UUPSUpgradeable_init();
+        __Ownable_init(_owner);
+
+        if (_accounting == address(0)) revert ZeroAddress();
+        accounting = IAccounting(_accounting);
 
         stalenessThreshold = _stalenessThreshold;
         limits = _limits;
 
         if (_roseUsdFeed == address(0)) revert InvalidPriceFeed();
         roseUsdFeed = AggregatorV3Interface(_roseUsdFeed);
-
-        // Transfer ownership to requested owner if different
-        if (_owner != owner()) {
-            _transferOwnership(_owner);
-        }
     }
 
     /**
      * @notice Authorizes contract upgrades (UUPS pattern)
      * @param newImplementation New implementation address
      */
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {
+        // Only owner can upgrade - implemented by onlyOwner modifier
+    }
+
+    // ---------------------------------------------------------------------
+    // Admin Functions
+    // ---------------------------------------------------------------------
 
     /**
-     * @inheritdoc ICrossChainPaymaster
+     * @notice Sets the Accounting contract address
+     * @param _accounting New Accounting contract address
      */
-    function setPriceFeed(address token, address feed) external onlyOwner override {
-        if (feed == address(0)) revert InvalidPriceFeed();
-        emit PriceFeedUpdated(token, address(priceFeeds[token]), feed);
-        priceFeeds[token] = AggregatorV3Interface(feed);
+    function setAccounting(address _accounting) external onlyOwner {
+        if (_accounting == address(0)) revert ZeroAddress();
+        address oldAccounting = address(accounting);
+        accounting = IAccounting(_accounting);
+        emit AccountingUpdated(oldAccounting, _accounting);
     }
 
     /**
      * @inheritdoc ICrossChainPaymaster
      */
-    function setRoseUsdFeed(address feed) external onlyOwner override {
+    function setPriceFeed(
+        bytes32 tokenId,
+        address feed
+    ) external override onlyOwner {
+        if (feed == address(0)) revert InvalidPriceFeed();
+        emit PriceFeedUpdated(tokenId, address(priceFeeds[tokenId]), feed);
+        priceFeeds[tokenId] = AggregatorV3Interface(feed);
+    }
+
+    /**
+     * @inheritdoc ICrossChainPaymaster
+     */
+    function setRoseUsdFeed(address feed) external override onlyOwner {
         if (feed == address(0)) revert InvalidPriceFeed();
         emit RoseUsdFeedUpdated(address(roseUsdFeed), feed);
         roseUsdFeed = AggregatorV3Interface(feed);
@@ -150,32 +161,22 @@ contract CrossChainPaymaster is
     /**
      * @inheritdoc ICrossChainPaymaster
      */
-    function setTokenDecimals(address token, uint8 decimals) external onlyOwner override {
-        tokenDecimals[token] = decimals;
-        emit TokenDecimalsSet(token, decimals);
+    function setTokenDecimals(
+        bytes32 tokenId,
+        uint8 decimals
+    ) external override onlyOwner {
+        tokenDecimals[tokenId] = decimals;
+        emit TokenDecimalsSet(tokenId, decimals);
     }
 
     /**
      * @inheritdoc ICrossChainPaymaster
      */
-    function setStalenessThreshold(uint256 threshold) external onlyOwner override {
+    function setStalenessThreshold(
+        uint256 threshold
+    ) external override onlyOwner {
         stalenessThreshold = threshold;
-    }
-
-    /**
-     * @inheritdoc ICrossChainPaymaster
-     */
-    function setChainConfig(uint256 chainId, SapphireTypes.ChainConfig calldata config) external onlyOwner override {
-        chainConfigs[chainId] = config;
-        emit ChainConfigUpdated(chainId, config);
-    }
-
-    /**
-     * @inheritdoc ICrossChainPaymaster
-     */
-    function setVaultAuthorization(uint256 chainId, address vault, bool authorized) external onlyOwner override {
-        isAuthorizedVault[chainId][vault] = authorized;
-        emit VaultAuthorizationUpdated(chainId, vault, authorized);
+        emit StalenessThresholdUpdated(threshold);
     }
 
     /**
@@ -185,7 +186,7 @@ contract CrossChainPaymaster is
         uint128 dailyLimit,
         uint128 perTxLimit,
         bool enabled
-    ) external onlyOwner override {
+    ) external override onlyOwner {
         limits.dailyLimit = dailyLimit;
         limits.perTxLimit = perTxLimit;
         limits.enabled = enabled;
@@ -198,7 +199,7 @@ contract CrossChainPaymaster is
     /**
      * @inheritdoc ICrossChainPaymaster
      */
-    function pause() external override onlyOwner{
+    function pause() external override onlyOwner {
         _pause();
     }
 
@@ -210,64 +211,76 @@ contract CrossChainPaymaster is
     }
 
     // ---------------------------------------------------------------------
-    // Core: Verify proof and distribute ROSE
+    // Core: Inbound (Non-Sapphire -> Sapphire) and Outbound (Sapphire -> Non-Sapphire)
     // ---------------------------------------------------------------------
 
     /**
-     * @inheritdoc ICrossChainPaymaster
+     * @notice Processes an inbound deposit from locked funds in Accounting, converts to ROSE, and distributes
+     * @dev Called by relayer when user locks non-Sapphire tokens to receive ROSE on Sapphire
+     * @param userAddress The user who locked the funds
+     * @param tokenId The token identifier from Accounting
+     * @param lockIndex The index of the lock in Accounting
+     * @param amount The amount of tokens locked
+     * @param signature The service (this contract) signature authorizing the transfer
      */
-    function processPayment(ReceiptProof calldata proof) external nonReentrant whenNotPaused override {
-        _processPayment(proof);
+    function processInboundDeposit(
+        address userAddress,
+        uint256 lockIndex,
+        bytes calldata signature // EIP712 of hot wallet that acts as the service (//TODO: be TEE based and part of this contract)
+    ) external nonReentrant whenNotPaused {
+        // Get lock by lockIndex, get tokenId and amount from there
+
+        // Transfer locked funds from user to this contract in Accounting
+        accounting.transferFromLock(
+            userAddress,
+            address(this), //TODO: make it transfer to multisig vault
+            lockIndex,
+            amount,
+            signature
+        );
+
+        // Convert token amount to ROSE
+        uint256 roseAmount = _convertToRose(tokenId, amount);
+
+        // Enforce distribution limits
+        if (SapphireTypes.wouldExceedLimits(limits, uint128(roseAmount)))
+            revert DistributionLimitExceeded();
+
+        // Update limits
+        limits = SapphireTypes.updateDistributionLimits(
+            limits,
+            uint128(roseAmount)
+        );
+
+        // Send ROSE to user
+        (bool success, ) = payable(userAddress).call{value: roseAmount}("");
+        if (!success) revert TransferFailed();
+
+        emit InboundProcessed(userAddress, tokenId, amount, roseAmount);
     }
 
     /**
-     * @notice Internal function to process a verified payment proof and distribute ROSE
-     * @param proof The Hashi receipt proof containing the PaymentInitiated event
+     * @notice Processes an outbound withdrawal by accepting ROSE and crediting target token in Accounting
+     * @dev Called by user when they want to convert ROSE to tokens on another chain
+     * @param targetTokenId The token identifier in Accounting for the target chain/token
      */
-    function _processPayment(ReceiptProof calldata proof) internal {
-        // Ensure source chain is enabled
-        SapphireTypes.ChainConfig memory cfg = chainConfigs[proof.chainId];
-        if (!cfg.enabled) revert ChainDisabled(proof.chainId);
+    function processOutboundWithdrawal(
+        bytes32 targetTokenId
+    ) external payable nonReentrant whenNotPaused {
+        uint256 roseAmount = msg.value;
+        if (roseAmount == 0) revert InvalidAmount();
 
-        // Verify event via Hashi (returns RLP-encoded Log: [address, topics[], data])
-        bytes memory logEntry = verifyForeignEvent(proof);
+        // Convert ROSE to target token amount
+        uint256 targetAmount = _convertFromRose(targetTokenId, roseAmount);
 
-        // Decode and validate event
-        // Intentionally ignore unused returns (payer, eventPaymentId)
-        address vault;
-        address recipient;
-        address token;
-        uint256 amount;
-        (vault, /* payer */, recipient, token, amount, /* eventPaymentId */) = _decodePaymentInitiated(logEntry);
+        // TODO: figure out how this should work? normally its done with EIP712 signatures (So either EOA or TEE based)
 
-        // Vault must be authorized for this chain
-        if (!isAuthorizedVault[proof.chainId][vault]) revert VaultNotAuthorized(proof.chainId, vault);
-
-        // Compute canonical paymentId from proof metadata
-        uint256 txIndex = _decodeRlpUint(proof.transactionIndex);
-        bytes32 paymentId = keccak256(abi.encode(
-            proof.chainId,
-            vault,
-            proof.blockNumber,
-            txIndex,
-            proof.logIndex
-        ));
-
-        // Duplicate prevention
-        if (processedPayments[paymentId]) revert DuplicatePayment(paymentId);
-
-        uint256 roseAmount = _convertToRose(token, amount);
-
-        // Enforce limits
-        if (SapphireTypes.wouldExceedLimits(limits, uint128(roseAmount))) revert DistributionLimitExceeded();
-
-        processedPayments[paymentId] = true;
-        limits = SapphireTypes.updateDistributionLimits(limits, uint128(roseAmount));
-
-        (bool ok, ) = payable(recipient).call{value: roseAmount}("");
-        if (!ok) revert TransferFailed();
-
-        emit PaymentProcessed(paymentId, roseAmount);
+        emit OutboundProcessed(
+            msg.sender,
+            targetTokenId,
+            roseAmount,
+            targetAmount
+        );
     }
 
     // ---------------------------------------------------------------------
@@ -276,7 +289,10 @@ contract CrossChainPaymaster is
     /**
      * @inheritdoc ICrossChainPaymaster
      */
-    function withdrawRose(address to, uint256 amount) external onlyOwner nonReentrant override {
+    function withdrawRose(
+        address to,
+        uint256 amount
+    ) external override onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert InvalidAmount();
         uint256 bal = address(this).balance;
@@ -293,70 +309,24 @@ contract CrossChainPaymaster is
     /**
      * @inheritdoc ICrossChainPaymaster
      */
-    function calculateRoseAmount(address token, uint256 tokenAmount) external view override returns (uint256) {
-        return _convertToRose(token, tokenAmount);
+    function calculateRoseAmount(
+        bytes32 tokenId,
+        uint256 tokenAmount
+    ) external view override returns (uint256) {
+        return _convertToRose(tokenId, tokenAmount);
     }
 
     /**
-     * @inheritdoc ICrossChainPaymaster
+     * @notice Calculates the token amount for a given ROSE amount
+     * @param tokenId The token identifier
+     * @param roseAmount The amount of ROSE
+     * @return The equivalent token amount
      */
-    function isPaymentProcessed(bytes32 paymentId) external view override returns (bool) {
-        return processedPayments[paymentId];
-    }
-
-    // Decode PaymentInitiated log: [address, [topics...], data]
-    /**
-     * @notice Decodes a PaymentInitiated event log entry from RLP format
-     * @param logEntry The RLP-encoded log entry from Hashi verification
-     * @return vault The vault contract address that emitted the event
-     * @return payer The address that initiated the payment
-     * @return recipient The intended recipient of the ROSE distribution
-     * @return token The token address used in the payment
-     * @return amount The token amount paid
-     * @return paymentId The deterministic payment identifier
-     */
-    function _decodePaymentInitiated(bytes memory logEntry) internal pure returns (
-        address vault,
-        address payer,
-        address recipient,
-        address token,
-        uint256 amount,
-        bytes32 paymentId
-    ) {
-        RLPReader.RLPItem[] memory fields = logEntry.toRLPItem().readList();
-        if (fields.length != 3) revert InvalidEvent();
-
-        // 0: address
-        vault = address(bytes20(fields[0].readBytes()));
-
-        // 1: topics[]
-        RLPReader.RLPItem[] memory topics = fields[1].readList();
-        if (topics.length != 4) revert InvalidEvent(); // sig + 3 indexed
-        bytes32 sig = bytes32(topics[0].readBytes());
-        if (sig != PAYMENT_INITIATED_TOPIC) revert InvalidEvent();
-        payer = address(uint160(uint256(bytes32(topics[1].readBytes()))));
-        recipient = address(uint160(uint256(bytes32(topics[2].readBytes()))));
-        token = address(uint160(uint256(bytes32(topics[3].readBytes()))));
-
-        // 2: data (abi.encode(amount, paymentId))
-        bytes memory data = fields[2].readBytes();
-        if (data.length == 0) revert InvalidEvent();
-        (amount, paymentId) = abi.decode(data, (uint256, bytes32));
-    }
-
-    // Decode RLP-encoded uint to uint256
-    /**
-     * @notice Decodes an RLP-encoded bytes array to uint256
-     * @param rlp The RLP-encoded bytes representing a uint value
-     * @return The decoded uint256 value
-     */
-    function _decodeRlpUint(bytes memory rlp) internal pure returns (uint256) {
-        bytes memory b = rlp.toRLPItem().readBytes();
-        uint256 number;
-        for (uint256 i = 0; i < b.length; i++) {
-            number = number + uint256(uint8(b[i])) * (2 ** (8 * (b.length - (i + 1))));
-        }
-        return number;
+    function calculateTokenAmount(
+        bytes32 tokenId,
+        uint256 roseAmount
+    ) external view returns (uint256) {
+        return _convertFromRose(tokenId, roseAmount);
     }
 
     // ---------------------------------------------------------------------
@@ -364,27 +334,46 @@ contract CrossChainPaymaster is
     // ---------------------------------------------------------------------
 
     /**
-     * @notice Converts token amount to ROSE amount using Chainlink-style price feeds
-     * @param token The token address
+     * @notice Converts token amount to ROSE amount using Chainlink price feeds
+     * @param tokenId The token identifier from Accounting
      * @param tokenAmount The amount of tokens to convert
      * @return roseAmount The equivalent amount in ROSE
      */
-    function _convertToRose(address token, uint256 tokenAmount) internal view returns (uint256 roseAmount) {
-        AggregatorV3Interface tokenUsd = priceFeeds[token];
-        if (address(tokenUsd) == address(0)) revert NoPriceFeedForToken(token);
+    function _convertToRose(
+        bytes32 tokenId,
+        uint256 tokenAmount
+    ) internal view returns (uint256 roseAmount) {
+        AggregatorV3Interface tokenUsd = priceFeeds[tokenId];
+        if (address(tokenUsd) == address(0))
+            revert NoPriceFeedForToken(tokenId);
         if (address(roseUsdFeed) == address(0)) revert InvalidPriceFeed();
 
-        (uint80 tRound, int256 tPrice, , uint256 tUpdated, uint80 tAnsweredIn) = tokenUsd.latestRoundData();
-        (uint80 rRound, int256 rPrice, , uint256 rUpdated, uint80 rAnsweredIn) = roseUsdFeed.latestRoundData();
+        (
+            uint80 tRound,
+            int256 tPrice,
+            ,
+            uint256 tUpdated,
+            uint80 tAnsweredIn
+        ) = tokenUsd.latestRoundData();
+        (
+            uint80 rRound,
+            int256 rPrice,
+            ,
+            uint256 rUpdated,
+            uint80 rAnsweredIn
+        ) = roseUsdFeed.latestRoundData();
 
         // Validate prices & rounds
         if (tPrice <= 0) revert InvalidPrice(tPrice);
         if (rPrice <= 0) revert InvalidPrice(rPrice);
-        if (tAnsweredIn < tRound || rAnsweredIn < rRound) revert StalePrice(0, 0);
-        if (tUpdated == 0 || block.timestamp - tUpdated > stalenessThreshold) revert StalePrice(tUpdated, stalenessThreshold);
-        if (rUpdated == 0 || block.timestamp - rUpdated > stalenessThreshold) revert StalePrice(rUpdated, stalenessThreshold);
+        if (tAnsweredIn < tRound || rAnsweredIn < rRound)
+            revert StalePrice(0, 0);
+        if (tUpdated == 0 || block.timestamp - tUpdated > stalenessThreshold)
+            revert StalePrice(tUpdated, stalenessThreshold);
+        if (rUpdated == 0 || block.timestamp - rUpdated > stalenessThreshold)
+            revert StalePrice(rUpdated, stalenessThreshold);
 
-        uint8 tokenDec = tokenDecimals[token];
+        uint8 tokenDec = tokenDecimals[tokenId];
         if (tokenDec == 0) tokenDec = 18;
 
         uint8 tDec = tokenUsd.decimals();
@@ -395,6 +384,60 @@ contract CrossChainPaymaster is
         uint256 num = Math.mulDiv(tokenAmount, uint256(tPrice), 10 ** tokenDec);
         num = Math.mulDiv(num, 10 ** rDec, 10 ** tDec);
         roseAmount = Math.mulDiv(num, 1e18, uint256(rPrice));
+    }
+
+    /**
+     * @notice Converts ROSE amount to token amount using Chainlink price feeds
+     * @param tokenId The token identifier from Accounting
+     * @param roseAmount The amount of ROSE to convert
+     * @return tokenAmount The equivalent amount in tokens
+     */
+    function _convertFromRose(
+        bytes32 tokenId,
+        uint256 roseAmount
+    ) internal view returns (uint256 tokenAmount) {
+        // Otherwise use Chainlink feeds
+        AggregatorV3Interface tokenUsd = priceFeeds[tokenId];
+        if (address(tokenUsd) == address(0))
+            revert NoPriceFeedForToken(tokenId);
+        if (address(roseUsdFeed) == address(0)) revert InvalidPriceFeed();
+
+        (
+            uint80 tRound,
+            int256 tPrice,
+            ,
+            uint256 tUpdated,
+            uint80 tAnsweredIn
+        ) = tokenUsd.latestRoundData();
+        (
+            uint80 rRound,
+            int256 rPrice,
+            ,
+            uint256 rUpdated,
+            uint80 rAnsweredIn
+        ) = roseUsdFeed.latestRoundData();
+
+        // Validate prices & rounds
+        if (tPrice <= 0) revert InvalidPrice(tPrice);
+        if (rPrice <= 0) revert InvalidPrice(rPrice);
+        if (tAnsweredIn < tRound || rAnsweredIn < rRound)
+            revert StalePrice(0, 0);
+        if (tUpdated == 0 || block.timestamp - tUpdated > stalenessThreshold)
+            revert StalePrice(tUpdated, stalenessThreshold);
+        if (rUpdated == 0 || block.timestamp - rUpdated > stalenessThreshold)
+            revert StalePrice(rUpdated, stalenessThreshold);
+
+        uint8 tokenDec = tokenDecimals[tokenId];
+        if (tokenDec == 0) tokenDec = 18;
+
+        uint8 tDec = tokenUsd.decimals();
+        uint8 rDec = roseUsdFeed.decimals();
+
+        // tokenAmount = roseAmount * (roseUsd / tokenUsd) adjusted to token decimals
+        // = roseAmount * rPrice * 10^tDec * 10^tokenDec / (10^18 * 10^rDec * tPrice)
+        uint256 num = Math.mulDiv(roseAmount, uint256(rPrice), 1e18);
+        num = Math.mulDiv(num, 10 ** tDec, 10 ** rDec);
+        tokenAmount = Math.mulDiv(num, 10 ** tokenDec, uint256(tPrice));
     }
 
     /// @notice Accepts ROSE funding
