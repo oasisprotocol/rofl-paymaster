@@ -20,7 +20,8 @@ const config: HardhatUserConfig = {
       forking: {
         url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
         enabled: !!process.env.ALCHEMY_API_KEY
-      }
+      },
+      initialBaseFeePerGas: 0
     },
     "sapphire-localnet": { // Sapphire localnet docker
       url: "http://localhost:8545",
@@ -66,7 +67,7 @@ const config: HardhatUserConfig = {
     enabled: true
   },
   etherscan: {
-    enabled: true,
+    enabled: false,
     apiKey: process.env.ETHERSCAN_API_KEY || "",
   }
 };

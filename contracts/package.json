@@ -2,7 +2,12 @@
   "name": "hardhat-project",
   "scripts": {
     "postinstall": "patch-package",
-    "lint": "solhint 'contracts/**/*.sol'"
+    "lint": "solhint 'contracts/**/*.sol'",
+    "test": "hardhat test",
+    "test:unit": "hardhat test 'test/unit/**/*.test.ts'",
+    "test:integration": "hardhat test 'test/integration/**/*.test.ts'",
+    "test:coverage": "hardhat coverage",
+    "test:gas": "REPORT_GAS=true hardhat test"
   },
   "devDependencies": {
     "@ethereumjs/block": "^10.0.0",

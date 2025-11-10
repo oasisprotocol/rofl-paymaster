@@ -27,11 +27,16 @@ interface ICrossChainPaymaster {
     event PriceFeedUpdated(address indexed token, address indexed oldFeed, address indexed newFeed);
 
     /**
-     * @notice Emitted when the ROSE/USD feed is updated
-     * @param oldFeed Previous ROSE/USD feed address
-     * @param newFeed New ROSE/USD feed address
+     * @notice Emitted when a ROSE/USD feed is added
+     * @param feed The price feed address that was added
      */
-    event RoseUsdFeedUpdated(address indexed oldFeed, address indexed newFeed);
+    event RoseUsdFeedAdded(address indexed feed);
+
+    /**
+     * @notice Emitted when a ROSE/USD feed is removed
+     * @param feed The price feed address that was removed
+     */
+    event RoseUsdFeedRemoved(address indexed feed);
 
     /**
      * @notice Emitted when token decimals are set
@@ -89,6 +94,10 @@ interface ICrossChainPaymaster {
     error ZeroAddress();
     error InvalidAmount();
     error InsufficientBalance(uint256 available, uint256 required);
+    error NoRoseUsdFeeds();
+    error NoValidRoseUsdFeeds();
+    error DuplicateRoseUsdFeed(address feed);
+    error RoseUsdFeedNotFound(address feed);
 
     /**
      * @notice Process a PaymentInitiated event proof and distribute ROSE (permissionless)
@@ -127,9 +136,23 @@ interface ICrossChainPaymaster {
     function priceFeeds(address token) external view returns (AggregatorV3Interface);
 
     /**
-     * @notice Returns the ROSE/USD price feed
+     * @notice Returns all configured ROSE/USD price feeds
+     * @return Array of price feed addresses
      */
-    function roseUsdFeed() external view returns (AggregatorV3Interface);
+    function getRoseUsdFeeds() external view returns (address[] memory);
+
+    /**
+     * @notice Returns the number of configured ROSE/USD price feeds
+     * @return The count of configured feeds
+     */
+    function getRoseUsdFeedCount() external view returns (uint256);
+
+    /**
+     * @notice Returns the ROSE/USD price feed at a specific index
+     * @param index The index in the feed set
+     * @return The price feed address at the given index
+     */
+    function getRoseUsdFeedAt(uint256 index) external view returns (address);
 
     /**
      * @notice Returns the decimals for a given token
@@ -155,15 +178,21 @@ interface ICrossChainPaymaster {
     /**
      * @notice Sets the price feed for a specific token
      * @param token The token address
-     * @param feed The Chainlink price feed address
+     * @param feed The price feed address
      */
     function setPriceFeed(address token, address feed) external;
 
     /**
-     * @notice Sets the ROSE/USD price feed
-     * @param feed The Chainlink price feed address for ROSE/USD
+     * @notice Adds a ROSE/USD price feed to the set
+     * @param feed The price feed address to add
      */
-    function setRoseUsdFeed(address feed) external;
+    function addRoseUsdFeed(address feed) external;
+
+    /**
+     * @notice Removes a ROSE/USD price feed from the set
+     * @param feed The price feed address to remove
+     */
+    function removeRoseUsdFeed(address feed) external;
 
     /**
      * @notice Sets the decimals for a specific token
