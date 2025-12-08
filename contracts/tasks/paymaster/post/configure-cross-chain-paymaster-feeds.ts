@@ -47,14 +47,46 @@ task("paymaster:set-token-feed", "Set TOKEN/USD feed and token decimals")
     if (Number.isNaN(decimals) || decimals < 0 || decimals > 36) throw new Error("invalid decimals");
 
     const paymaster = await ethers.getContractAt("CrossChainPaymaster", proxy);
-    console.log("Setting token feed:", { token, feed });
-    let tx = await paymaster.setPriceFeed(token, feed);
-    console.log(" setPriceFeed tx:", tx.hash);
-    await tx.wait();
-    console.log("Setting token decimals:", decimals);
-    tx = await paymaster.setTokenDecimals(token, decimals);
-    console.log(" setTokenDecimals tx:", tx.hash);
-    await tx.wait();
+
+    // Read current state
+    const currentFeed = await paymaster.priceFeeds(token);
+    const currentDecimals = await paymaster.tokenDecimals(token);
+
+    console.log("Current token feed:    ", currentFeed);
+    console.log("Current token decimals:", currentDecimals);
+    console.log("Requested feed:        ", feed);
+    console.log("Requested decimals:    ", decimals);
+
+    const feedMatches = currentFeed.toLowerCase() === feed.toLowerCase();
+    const decimalsMatch = Number(currentDecimals) === decimals;
+
+    // Skip if both already configured
+    if (feedMatches && decimalsMatch) {
+      console.log("ℹ️  Token feed and decimals already set to requested values");
+      console.log("✅ Token feed configuration unchanged (already correct)");
+      return;
+    }
+
+    // Update feed if needed
+    if (feedMatches) {
+      console.log("ℹ️  Token feed already set to requested value, skipping setPriceFeed");
+    } else {
+      console.log("Setting token feed:", feed);
+      const tx = await paymaster.setPriceFeed(token, feed);
+      console.log(" setPriceFeed tx:", tx.hash);
+      await tx.wait();
+    }
+
+    // Update decimals if needed
+    if (decimalsMatch) {
+      console.log("ℹ️  Token decimals already set to requested value, skipping setTokenDecimals");
+    } else {
+      console.log("Setting token decimals:", decimals);
+      const tx = await paymaster.setTokenDecimals(token, decimals);
+      console.log(" setTokenDecimals tx:", tx.hash);
+      await tx.wait();
+    }
+
     console.log("✅ Token feed configured");
   });
 
