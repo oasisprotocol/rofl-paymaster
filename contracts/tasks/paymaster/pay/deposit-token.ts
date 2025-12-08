@@ -88,7 +88,7 @@ task("pay:deposit", "Deposit ERC20 into PaymasterVault and emit PaymentInitiated
         throw new Error("Allowance insufficient. Re-run without --noapprove to auto-approve the vault");
       }
       console.log("\n✅ Approving vault to spend tokens...");
-      const atx = await token.approve(vaultAddr, amount);
+      const atx = await token.approve(vaultAddr, amount*5n);
       console.log("  approve tx:", atx.hash);
       await atx.wait();
     }

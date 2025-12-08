@@ -24,6 +24,7 @@ deployments:
     network: testnet
     paratime: sapphire
     admin: myaccount
+    oci_repository: rofl.sh/b8499076-432e-43bd-91d8-457d6fd10e3c:1764357905
     trust_root:
       height: 28431293
       hash: 3d5d8c98ecc4bb70b7ea3ac8fbc039a5c4c129253ecb5cee3e2073fdcb3558a9
@@ -51,3 +52,8 @@ deployments:
         value: pGJwa1ggwfzVTyKBiSdpGLMuFM5mcwyQbMiT0T24I581QJrgNn1kbmFtZVgeXnXze1bJeIB2kTLszAg795qj1xZS37eGlMduWA4+ZW5vbmNlT8qWVkSxNxBOYbWrEWlojGV2YWx1ZVhV6n6pGiKGTFgwlPKezw24mM2zhUmzRDHtx8rYk+suCloNYyjI7KH7CuzPwu9CZiAmfK+M7H24xTlvvAOoO6E4t5AtyC5UyI3hK+46kl/Ma1iGho7RnA==
       - name: TARGET_RPC_URL
         value: pGJwa1gg11O8vxr9H8ve3w105kkBW/mZ9xRc505obwYMRQQb0TlkbmFtZVgeKmzssif6uVw/Dc4mz3/a+fl08rI623EYjZQpthUsZW5vbmNlTyDA+ieh2z9ctVONHSoeIGV2YWx1ZVgxtVYRso3NnGy9D+yErWExUgLNErAyFzyGPZX/+r/yELD2Sh7LGuHXQc6932m1sn1ujA==
+    machines:
+      default:
+        provider: oasis1qp2ens0hsp7gh23wajxa4hpetkdek3swyyulyrmz
+        offer: playground_short
+        id: 000000000000049a
