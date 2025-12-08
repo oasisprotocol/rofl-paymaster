@@ -171,9 +171,12 @@ bun hardhat configure:paymaster-vault \
 
 ### Price Feed Management
 
-CrossChainPaymaster uses ROSE/USD price feeds configured at deployment. To update feeds after deployment, use the upgrade or configure tasks with new feed addresses.
+CrossChainPaymaster uses ROSE/USD price feeds configured at deployment. To
+update feeds after deployment, use the upgrade or configure tasks with new feed
+addresses.
 
-For testing with mock feeds, deploy multiple `MockV3Aggregator` instances (see deployment section above) and configure them via the `--roseusd` parameter.
+For testing with mock feeds, deploy multiple `MockV3Aggregator` instances (see
+deployment section above) and configure them via the `--roseusd` parameter.
 
 ## Flow: Deposit → Proof → Relay
 
