@@ -16,19 +16,15 @@ import {
 describe("CrossChainPaymaster - Integration Tests", function () {
   describe("Initialization", function () {
     it("should initialize with correct parameters", async function () {
-      const { paymaster, roseUsdFeed1, roseUsdFeed2, roseUsdFeed3, owner } = await loadFixture(
+      const { paymaster, roseUsdFeed, owner } = await loadFixture(
         deployTestCrossChainPaymasterFixture
       );
 
       // Check staleness threshold
       expect(await paymaster.stalenessThreshold()).to.equal(STALENESS_THRESHOLD);
 
-      // Check ROSE/USD feeds
-      const feeds = await paymaster.getRoseUsdFeeds();
-      expect(feeds).to.have.lengthOf(3);
-      expect(feeds).to.include(await roseUsdFeed1.getAddress());
-      expect(feeds).to.include(await roseUsdFeed2.getAddress());
-      expect(feeds).to.include(await roseUsdFeed3.getAddress());
+      // Check ROSE/USD feed
+      expect(await paymaster.roseUsdFeed()).to.equal(await roseUsdFeed.getAddress());
 
       // Check distribution limits
       const limits = await paymaster.limits();
@@ -40,7 +36,7 @@ describe("CrossChainPaymaster - Integration Tests", function () {
       expect(await paymaster.owner()).to.equal(owner.address);
     });
 
-    it("should revert if initialized with no ROSE/USD feeds", async function () {
+    it("should revert if initialized with zero address ROSE/USD feed", async function () {
       const [owner, user1] = await ethers.getSigners();
       const TestCrossChainPaymasterFactory = await ethers.getContractFactory(
         "TestCrossChainPaymaster"
@@ -63,35 +59,7 @@ describe("CrossChainPaymaster - Integration Tests", function () {
           user1.address,
           distributionLimits,
           STALENESS_THRESHOLD,
-          [] // Empty ROSE feeds array
-        )
-      ).to.be.revertedWithCustomError(paymaster, "NoRoseUsdFeeds");
-    });
-
-    it("should revert if initialized with zero address feed", async function () {
-      const [owner, user1] = await ethers.getSigners();
-      const TestCrossChainPaymasterFactory = await ethers.getContractFactory(
-        "TestCrossChainPaymaster"
-      );
-
-      const distributionLimits = {
-        dailyLimit: DAILY_LIMIT,
-        perTxLimit: PER_TX_LIMIT,
-        lastResetDay: 0,
-        currentDaily: 0,
-        enabled: true,
-      };
-
-      const paymaster = await TestCrossChainPaymasterFactory.deploy();
-      await paymaster.waitForDeployment();
-
-      await expect(
-        paymaster.initialize(
-          owner.address,
-          user1.address,
-          distributionLimits,
-          STALENESS_THRESHOLD,
-          [ZeroAddress]
+          ZeroAddress // Zero address ROSE feed
         )
       ).to.be.revertedWithCustomError(paymaster, "InvalidPriceFeed");
     });
@@ -137,103 +105,40 @@ describe("CrossChainPaymaster - Integration Tests", function () {
       });
     });
 
-    describe("addRoseUsdFeed", function () {
+    describe("setRoseUsdFeed", function () {
       let paymaster: any;
       let user1: any;
-      let roseUsdFeed1: any;
+      let roseUsdFeed: any;
 
       beforeEach(async function () {
-        ({ paymaster, user1, roseUsdFeed1 } = await loadFixture(deployTestCrossChainPaymasterFixture));
+        ({ paymaster, user1, roseUsdFeed } = await loadFixture(deployTestCrossChainPaymasterFixture));
       });
 
-      it("should allow owner to add ROSE/USD feed", async function () {
+      it("should allow owner to set ROSE/USD feed", async function () {
         const MockV3AggregatorFactory = await ethers.getContractFactory("contracts/test/mocks/MockV3Aggregator.sol:MockV3Aggregator");
         const newFeed = await MockV3AggregatorFactory.deploy(DECIMALS_8, 5_00000000n);
 
-        const feedsBefore = await paymaster.getRoseUsdFeedCount();
+        const oldFeed = await paymaster.roseUsdFeed();
 
-        await expect(paymaster.addRoseUsdFeed(await newFeed.getAddress()))
-          .to.emit(paymaster, "RoseUsdFeedAdded")
-          .withArgs(await newFeed.getAddress());
+        await expect(paymaster.setRoseUsdFeed(await newFeed.getAddress()))
+          .to.emit(paymaster, "RoseUsdFeedUpdated")
+          .withArgs(oldFeed, await newFeed.getAddress());
 
-        const feedsAfter = await paymaster.getRoseUsdFeedCount();
-        expect(feedsAfter).to.equal(feedsBefore + 1n);
-
-        const feeds = await paymaster.getRoseUsdFeeds();
-        expect(feeds).to.include(await newFeed.getAddress());
+        expect(await paymaster.roseUsdFeed()).to.equal(await newFeed.getAddress());
       });
 
-      it("should revert when adding duplicate feed", async function () {
-        await expect(
-          paymaster.addRoseUsdFeed(await roseUsdFeed1.getAddress())
-        ).to.be.revertedWithCustomError(paymaster, "DuplicateRoseUsdFeed");
-      });
-
-      it("should revert when adding zero address", async function () {
-        await expect(paymaster.addRoseUsdFeed(ZeroAddress)).to.be.revertedWithCustomError(
+      it("should revert when setting zero address", async function () {
+        await expect(paymaster.setRoseUsdFeed(ZeroAddress)).to.be.revertedWithCustomError(
           paymaster,
           "InvalidPriceFeed"
         );
       });
 
-      it("should revert when non-owner tries to add feed", async function () {
+      it("should revert when non-owner tries to set feed", async function () {
         const newFeed = ethers.Wallet.createRandom().address;
 
         await expect(
-          paymaster.connect(user1).addRoseUsdFeed(newFeed)
-        ).to.be.revertedWithCustomError(paymaster, "OwnableUnauthorizedAccount");
-      });
-    });
-
-    describe("removeRoseUsdFeed", function () {
-      let paymaster: any;
-      let user1: any;
-      let roseUsdFeed1: any;
-      let roseUsdFeed2: any;
-      let roseUsdFeed3: any;
-
-      beforeEach(async function () {
-        ({ paymaster, user1, roseUsdFeed1, roseUsdFeed2, roseUsdFeed3 } = await loadFixture(
-          deployTestCrossChainPaymasterFixture
-        ));
-      });
-
-      it("should allow owner to remove ROSE/USD feed", async function () {
-        const feedsBefore = await paymaster.getRoseUsdFeedCount();
-
-        await expect(paymaster.removeRoseUsdFeed(await roseUsdFeed3.getAddress()))
-          .to.emit(paymaster, "RoseUsdFeedRemoved")
-          .withArgs(await roseUsdFeed3.getAddress());
-
-        const feedsAfter = await paymaster.getRoseUsdFeedCount();
-        expect(feedsAfter).to.equal(feedsBefore - 1n);
-
-        const feeds = await paymaster.getRoseUsdFeeds();
-        expect(feeds).to.not.include(await roseUsdFeed3.getAddress());
-      });
-
-      it("should revert when trying to remove non-existent feed", async function () {
-        const randomAddress = ethers.Wallet.createRandom().address;
-
-        await expect(
-          paymaster.removeRoseUsdFeed(randomAddress)
-        ).to.be.revertedWithCustomError(paymaster, "RoseUsdFeedNotFound");
-      });
-
-      it("should revert when trying to remove last feed", async function () {
-        // Remove all but one
-        await paymaster.removeRoseUsdFeed(await roseUsdFeed2.getAddress());
-        await paymaster.removeRoseUsdFeed(await roseUsdFeed3.getAddress());
-
-        // Try to remove the last one
-        await expect(
-          paymaster.removeRoseUsdFeed(await roseUsdFeed1.getAddress())
-        ).to.be.revertedWithCustomError(paymaster, "NoRoseUsdFeeds");
-      });
-
-      it("should revert when non-owner tries to remove feed", async function () {
-        await expect(
-          paymaster.connect(user1).removeRoseUsdFeed(await roseUsdFeed1.getAddress())
+          paymaster.connect(user1).setRoseUsdFeed(newFeed)
         ).to.be.revertedWithCustomError(paymaster, "OwnableUnauthorizedAccount");
       });
     });
@@ -529,9 +434,10 @@ describe("CrossChainPaymaster - Integration Tests", function () {
 
     describe("other view functions", function () {
       let paymaster: any;
+      let roseUsdFeed: any;
 
       beforeEach(async function () {
-        ({ paymaster } = await loadFixture(deployTestCrossChainPaymasterFixture));
+        ({ paymaster, roseUsdFeed } = await loadFixture(deployTestCrossChainPaymasterFixture));
       });
 
       it("should return false for unprocessed payment", async function () {
@@ -540,15 +446,8 @@ describe("CrossChainPaymaster - Integration Tests", function () {
         expect(await paymaster.isPaymentProcessed(randomPaymentId)).to.be.false;
       });
 
-      it("should return correct ROSE/USD feed count", async function () {
-        expect(await paymaster.getRoseUsdFeedCount()).to.equal(3);
-      });
-
-      it("should return ROSE/USD feed at index", async function () {
-        const feedAtIndex0 = await paymaster.getRoseUsdFeedAt(0);
-        const feeds = await paymaster.getRoseUsdFeeds();
-
-        expect(feeds[0]).to.equal(feedAtIndex0);
+      it("should return correct ROSE/USD feed", async function () {
+        expect(await paymaster.roseUsdFeed()).to.equal(await roseUsdFeed.getAddress());
       });
     });
   });

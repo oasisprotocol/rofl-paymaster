@@ -8,76 +8,26 @@ function requireAddress(name: string, val?: string): string {
   return val;
 }
 
-// Add ROSE/USD aggregator to CrossChainPaymaster
-// Usage: bunx hardhat paymaster:add-roseusd --proxy 0x... --feed 0x...
-task("paymaster:add-roseusd", "Add ROSE/USD feed to CrossChainPaymaster (supports multiple feeds for redundancy)")
+// Set ROSE/USD aggregator on CrossChainPaymaster
+// Usage: bunx hardhat paymaster:set-roseusd --proxy 0x... --feed 0x...
+task("paymaster:set-roseusd", "Set ROSE/USD feed on CrossChainPaymaster")
   .addOptionalParam("proxy", "CrossChainPaymaster proxy address (env PAYMASTER_SAPPHIRE_PROXY)")
-  .addOptionalParam("feed", "Aggregator address to add")
+  .addOptionalParam("feed", "Aggregator address to set (env ROSE_USD_FEED)")
   .setAction(async (args: { proxy?: string; feed?: string }, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     const proxy = requireAddress("proxy", args.proxy ?? process.env.PAYMASTER_SAPPHIRE_PROXY);
-    const feed = requireAddress("feed", args.feed);
+    const feed = requireAddress("feed", args.feed ?? process.env.ROSE_USD_FEED);
     const paymaster = await ethers.getContractAt("CrossChainPaymaster", proxy);
 
-    const currentCount = await paymaster.getRoseUsdFeedCount();
-    console.log(`Current feed count: ${currentCount}`);
-    console.log("Adding ROSE/USD feed:", feed);
+    const currentFeed = await paymaster.roseUsdFeed();
+    console.log("Current ROSE/USD feed:", currentFeed);
+    console.log("Setting ROSE/USD feed:", feed);
 
-    const tx = await paymaster.addRoseUsdFeed(feed);
+    const tx = await paymaster.setRoseUsdFeed(feed);
     console.log("tx:", tx.hash);
     await tx.wait();
 
-    const newCount = await paymaster.getRoseUsdFeedCount();
-    console.log(`✅ ROSE/USD feed added (total feeds: ${newCount})`);
-
-    if (newCount >= 3n) {
-      console.log("ℹ️  Using median aggregation for outlier resistance");
-    } else if (newCount === 2n) {
-      console.log("ℹ️  Using mean aggregation");
-    }
-  });
-
-// Remove ROSE/USD aggregator from CrossChainPaymaster
-// Usage: bunx hardhat paymaster:remove-roseusd --proxy 0x... --feed 0x...
-task("paymaster:remove-roseusd", "Remove ROSE/USD feed from CrossChainPaymaster")
-  .addOptionalParam("proxy", "CrossChainPaymaster proxy address (env PAYMASTER_SAPPHIRE_PROXY)")
-  .addOptionalParam("feed", "Aggregator address to remove")
-  .setAction(async (args: { proxy?: string; feed?: string }, hre: HardhatRuntimeEnvironment) => {
-    const { ethers } = hre;
-    const proxy = requireAddress("proxy", args.proxy ?? process.env.PAYMASTER_SAPPHIRE_PROXY);
-    const feed = requireAddress("feed", args.feed);
-    const paymaster = await ethers.getContractAt("CrossChainPaymaster", proxy);
-
-    // Check current feed count
-    const feedCount = await paymaster.getRoseUsdFeedCount();
-    console.log("Current ROSE/USD feed count:", feedCount.toString());
-
-    if (feedCount <= 1n) {
-      throw new Error("Cannot remove the last ROSE/USD feed. At least one feed must remain.");
-    }
-
-    console.log("Removing ROSE/USD feed:", feed);
-    const tx = await paymaster.removeRoseUsdFeed(feed);
-    console.log("tx:", tx.hash);
-    await tx.wait();
-    console.log("✅ ROSE/USD feed removed");
-  });
-
-// List all ROSE/USD feeds
-// Usage: bunx hardhat paymaster:list-roseusd --proxy 0x...
-task("paymaster:list-roseusd", "List all ROSE/USD feeds configured on CrossChainPaymaster")
-  .addOptionalParam("proxy", "CrossChainPaymaster proxy address (env PAYMASTER_SAPPHIRE_PROXY)")
-  .setAction(async (args: { proxy?: string }, hre: HardhatRuntimeEnvironment) => {
-    const { ethers } = hre;
-    const proxy = requireAddress("proxy", args.proxy ?? process.env.PAYMASTER_SAPPHIRE_PROXY);
-    const paymaster = await ethers.getContractAt("CrossChainPaymaster", proxy);
-
-    const feeds = await paymaster.getRoseUsdFeeds();
-    console.log(`\n📋 ROSE/USD Feeds (${feeds.length} total):`);
-    feeds.forEach((feed: string, index: number) => {
-      console.log(`  ${index + 1}. ${feed}`);
-    });
-    console.log();
+    console.log("✅ ROSE/USD feed updated");
   });
 
 // Wire TOKEN/USD aggregator and decimals
@@ -124,4 +74,3 @@ task("paymaster:set-staleness", "Set staleness threshold (seconds)")
     await tx.wait();
     console.log("✅ Staleness threshold set");
   });
-

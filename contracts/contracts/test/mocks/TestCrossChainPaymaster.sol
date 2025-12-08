@@ -24,20 +24,6 @@ contract TestCrossChainPaymaster is CrossChainPaymaster {
     }
 
     /**
-     * @notice Exposes _calculateMedian for testing
-     * @param prices Array of normalized prices
-     * @param count Number of valid prices in the array
-     * @return The median price
-     */
-    function exposed_calculateMedian(uint256[] memory prices, uint256 count)
-        external
-        pure
-        returns (uint256)
-    {
-        return _calculateMedian(prices, count);
-    }
-
-    /**
      * @notice Exposes _decodePaymentInitiated for testing
      * @param logEntry The RLP-encoded log entry
      * @return vault The vault contract address
