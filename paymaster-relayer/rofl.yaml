@@ -24,7 +24,6 @@ deployments:
     network: testnet
     paratime: sapphire
     admin: myaccount
-    oci_repository: rofl.sh/b8499076-432e-43bd-91d8-457d6fd10e3c:1764357905
     trust_root:
       height: 28431293
       hash: 3d5d8c98ecc4bb70b7ea3ac8fbc039a5c4c129253ecb5cee3e2073fdcb3558a9
@@ -43,17 +42,12 @@ deployments:
       max_expiration: 3
     secrets:
       - name: PAYMASTER_PROXY_ADDRESS
-        value: pGJwa1ggPg91Kg3E3D0WACrsEEkEraoRCsSJ6/+0g6U51YXgtAZkbmFtZVgnMMHZOmJ2gnK86rmW+QPQfEA1wYx88a6R+zOBJwCiIiEBemJrf332ZW5vbmNlT8Z2d61+Uk61bkMctNZeTmV2YWx1ZVg6LWZBSzQIGqwCv9/TTcCSfM2jHW3bg8zETav/oKobVuNr94vKujUybeRey472bfTFYruL9OuJnpjcnw==
+        value: pGJwa1ggdzuU5+oIw01twf8Wl7fM77CM8FA6X9q0jleAj5xwEWVkbmFtZVgnp1O/QAnOhMaUBO+zLZcaBWfN5Tv/mCacHjaqhi7U6a4a+l1wmnB2ZW5vbmNlT4VcuxH3cbC034SyllGkl2V2YWx1ZVg64IHZoI26rQ+bCFy0dO0oMfQETgOiPALtHouL7lMcjL5QqcZ6fePPryU1BGRPhP2hl10SPWkRpxPufA==
       - name: PAYMASTER_VAULT_ADDRESS
-        value: pGJwa1ggKjTeJwMFai+JooXDwb/Zn5oKSB8OCfvr4Go+YMtZP1FkbmFtZVgnD2mY8Xn9mcElqP6h/7pQ5tjOhIUtWSrxlqwuAe1cPzgWnuD+uD1lZW5vbmNlT1f40zGQP5p3irHRJmab0GV2YWx1ZVg6cLusUeWppJG6OXYROiXVd6cfsZZbZko6Rb/Fl1bgyZOukIu/j7ON62KXk+npb48zASFYO2HMeo86+A==
+        value: pGJwa1ggjwzNvsRsY3dE+cuBy439RyQlNiLL2/rrHO6HTWNcNCRkbmFtZVgnfDyMqR9nEtXuR4vmSGS/S5qHxG6snNKXD53MbE3qrZlzUjDUjj2/ZW5vbmNlT9BnE1p0UH4wmHppk+RO32V2YWx1ZVg6wJoGzdoSF9KgbaQUHyL5uUbCHafpn2aqrXVCOdkQInzJAW1cCoLzXDxhuUHF/4pbNROagsPCyGfOUQ==
       - name: ROFL_ADAPTER_ADDRESS
-        value: pGJwa1ggNRlCOK+v89nlpGwx4ryviePmplctcFMnZpex8q7ofHpkbmFtZVgkey8ElDnoD5c4R6blxXq9Na4+fCDGo4bce5C6Gmn+6GzWKlPKZW5vbmNlT5ffpaPksyE2JlpyQ1PvrGV2YWx1ZVg64uxwm1FIcuaqrSUSTGQMZBvB1QRRMEbdb8p1N9cJ3A2jt9HKtsxKZRNImFdEGIa/X3O+qH2de5G5Kw==
+        value: pGJwa1ggy2aGVNJY/1RmPNbcmZG+eQLy6s37aZW2jpM6G9UzezhkbmFtZVgk6XgxgEshb+irIM5ta1Yx77QNdKX7yEfaOsrlYi0vS6KI/aFBZW5vbmNlT6pMfi3wtqN2RXesacitg2V2YWx1ZVg6/fq7U9Hf/XK1hZNRN7NKMCm18Blbjc581oJ+97VkTXUIgpPec7mA/l4Fbeou3haQ4dI0Rv89odhjHQ==
       - name: SOURCE_RPC_URL
-        value: pGJwa1ggwfzVTyKBiSdpGLMuFM5mcwyQbMiT0T24I581QJrgNn1kbmFtZVgeXnXze1bJeIB2kTLszAg795qj1xZS37eGlMduWA4+ZW5vbmNlT8qWVkSxNxBOYbWrEWlojGV2YWx1ZVhV6n6pGiKGTFgwlPKezw24mM2zhUmzRDHtx8rYk+suCloNYyjI7KH7CuzPwu9CZiAmfK+M7H24xTlvvAOoO6E4t5AtyC5UyI3hK+46kl/Ma1iGho7RnA==
+        value: pGJwa1gg37A75hVhjtbIQZ3PMZLkDdvHna/FFO4GntZd7y17yAhkbmFtZVgejNzd5K3CV8hUmbBRFgIcqFr/MdwVOhZpBI1E1QdRZW5vbmNlT/TP1UkyJpo+VkXw6gLAomV2YWx1ZVhVNFj0u1WY0aX64+zjbx9oraDswVTbsYcqtGBXqlI+vG4DE7VyiGE/BJy0xSMcSDNJH6KP3sUx+fPYUOEKYm8EQ4njKIiK2tPb2Yn+aoIDG8tHq2+kTw==
       - name: TARGET_RPC_URL
-        value: pGJwa1gg11O8vxr9H8ve3w105kkBW/mZ9xRc505obwYMRQQb0TlkbmFtZVgeKmzssif6uVw/Dc4mz3/a+fl08rI623EYjZQpthUsZW5vbmNlTyDA+ieh2z9ctVONHSoeIGV2YWx1ZVgxtVYRso3NnGy9D+yErWExUgLNErAyFzyGPZX/+r/yELD2Sh7LGuHXQc6932m1sn1ujA==
-    machines:
-      default:
-        provider: oasis1qp2ens0hsp7gh23wajxa4hpetkdek3swyyulyrmz
-        offer: playground_short
-        id: 000000000000049a
+        value: pGJwa1gg4bhleyNEIOg6qfhS56oR5t7cre0BNC+7gIS60J5vGGNkbmFtZVgeoeIQvkXBbYibeymLTgfO3aQclbRigAPRk5LMuQ43ZW5vbmNlT0WGEfvflESa7auLlgNyR2V2YWx1ZVgxdhPBN5/JZOgjXB8EYeKHWxsid4DSnk/5giLW7fUnZR2hVNNiGpYaIv2rDAfIXdautQ==
