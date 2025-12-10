@@ -47,6 +47,11 @@ const config: HardhatUserConfig = {
       url: "https://testnet.sapphire.oasis.dev",
       accounts,
       chainId: 23295
+    },
+    "sapphire-mainnet": {
+      url: "https://sapphire.oasis.io",
+      accounts,
+      chainId: 23294
     }
   },
   solidity: {

@@ -1,32 +1,30 @@
 name: paymaster-relayer
 version: 0.1.0
-repository: https://github.com/oasisprotocol/rofl-paymaster
-author: rube-de <rube@ruf2.de>
-license: Apache-2.0
 tee: tdx
 kind: container
 resources:
-  memory: 2048
+  memory: 4096
   cpus: 2
   storage:
     kind: disk-persistent
-    size: 10000
+    size: 5000
 artifacts:
   firmware: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/ovmf.tdx.fd#db47100a7d6a0c1f6983be224137c3f8d7cb09b63bb1c7a5ee7829d8e994a42f
   kernel: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/stage1.bin#e5d4d654ca1fa2c388bf64b23fc6e67815893fc7cb8b7cfee253d87963f54973
   stage2: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/stage2-podman.tar.bz2#b2ea2a0ca769b6b2d64e3f0c577ee9c08f0bb81a6e33ed5b15b2a7e50ef9a09f
   container:
-    runtime: https://github.com/oasisprotocol/oasis-sdk/releases/download/rofl-containers%2Fv0.7.3/rofl-containers#964fbd8edaea8041fd9c5304bb4631b7126d57d06062cc3922e50313cdeef618
+    runtime: https://github.com/oasisprotocol/oasis-sdk/releases/download/rofl-containers%2Fv0.8.5/rofl-containers#b63e85b33d37f1c762aef85125617d87d79763c3fe3f30815301f0f9fe57179d
     compose: compose.yaml
 deployments:
   default:
-    app_id: rofl1qq5f74f4trv3kctsyfl8s9ppjyn0njzw9sy34exg
-    network: testnet
+    app_id: rofl1qralj7kx4fnvlnw720wu9h9k9fm0l8wpssxrumpv
+    network: mainnet
     paratime: sapphire
-    admin: myaccount
+    admin: paymaster
+    oci_repository: rofl.sh/53089b34-2288-4e53-8908-7c170d71484b:1765402595
     trust_root:
-      height: 28431293
-      hash: 3d5d8c98ecc4bb70b7ea3ac8fbc039a5c4c129253ecb5cee3e2073fdcb3558a9
+      height: 27685721
+      hash: 4097a89f1aebef26c7537c9f07487faa03c2965e42edb0998fadc30431deea13
     policy:
       quotes:
         pcs:
@@ -34,20 +32,25 @@ deployments:
           min_tcb_evaluation_data_number: 18
           tdx: {}
       enclaves:
-        - id: f9G+g5EdHb8X1m8bwvA8Bi4Ch99Yco0bmVgyFgDCDjoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-        - id: tYcuti+mUkto1ZAuHWqBQw1x2pdUzAngtfuMZA/KUGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: p/pr1QTUx7XBCjmrpP3aNH8k8KZ0lP1oSusGyeJgQJgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: HcsZO3k6yVzaeepD5bh/CPjoRtKDEAs+uareXsqyms4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
       endorsements:
         - any: {}
       fees: endorsing_node
       max_expiration: 3
     secrets:
       - name: PAYMASTER_PROXY_ADDRESS
-        value: pGJwa1ggdzuU5+oIw01twf8Wl7fM77CM8FA6X9q0jleAj5xwEWVkbmFtZVgnp1O/QAnOhMaUBO+zLZcaBWfN5Tv/mCacHjaqhi7U6a4a+l1wmnB2ZW5vbmNlT4VcuxH3cbC034SyllGkl2V2YWx1ZVg64IHZoI26rQ+bCFy0dO0oMfQETgOiPALtHouL7lMcjL5QqcZ6fePPryU1BGRPhP2hl10SPWkRpxPufA==
+        value: pGJwa1ggqcQ+Wdb2aXDNbY1ZtocH7iMJFiaWz1CeW98qWaf0+glkbmFtZVgnE2SRBathYCBvmvtTamYaRUV1/ofuj1HZWaMUM1rMaFF8EXFG3fuQZW5vbmNlT+iPziNkKg9hlWxpIL5KiGV2YWx1ZVg6c+vkqgCvN80gFYYniO9aImGUGH50bPEa5/Ap7ZjvYJ7o36IIyzKEAE4R8x29gFQB88FI++ZUiB8Fsw==
       - name: PAYMASTER_VAULT_ADDRESS
-        value: pGJwa1ggjwzNvsRsY3dE+cuBy439RyQlNiLL2/rrHO6HTWNcNCRkbmFtZVgnfDyMqR9nEtXuR4vmSGS/S5qHxG6snNKXD53MbE3qrZlzUjDUjj2/ZW5vbmNlT9BnE1p0UH4wmHppk+RO32V2YWx1ZVg6wJoGzdoSF9KgbaQUHyL5uUbCHafpn2aqrXVCOdkQInzJAW1cCoLzXDxhuUHF/4pbNROagsPCyGfOUQ==
+        value: pGJwa1gg7E1qg0h8RzFuil3s62UZD0T4cMaLsoPouCOfaRDynENkbmFtZVgnkjied9UHLB6a8jqOTI/6NNJaegUgwFbEHtXzx2g/hiAXtGWMIbcJZW5vbmNlT1Zr/sRJaIVSNoYoBjewMGV2YWx1ZVg6QHJTZLI3ZW83gIJco3PGaDGoIeA3Ny+6fRvUMTfdV/ok4imhx7sKzQSbiPYJpoS6FNtWbhdI2ljMKA==
       - name: ROFL_ADAPTER_ADDRESS
-        value: pGJwa1ggy2aGVNJY/1RmPNbcmZG+eQLy6s37aZW2jpM6G9UzezhkbmFtZVgk6XgxgEshb+irIM5ta1Yx77QNdKX7yEfaOsrlYi0vS6KI/aFBZW5vbmNlT6pMfi3wtqN2RXesacitg2V2YWx1ZVg6/fq7U9Hf/XK1hZNRN7NKMCm18Blbjc581oJ+97VkTXUIgpPec7mA/l4Fbeou3haQ4dI0Rv89odhjHQ==
+        value: pGJwa1gg7lKYMr5wJ1m0RjDJKfca7IYl1vO4bE63uOvIAd6LQHFkbmFtZVgkF6KpE3L2Gc0fEYz+ZAM/LS/nF2xtqx5d3KCv3JJUPZ4qd/7YZW5vbmNlT/F9+fj4BuTUeDih2mi/TWV2YWx1ZVg69d0QOVEpRqIbSxJRRCVb8nveyDiO0Wwxn2p71TQ0kbObZWulb+iSOPQPhvB7jsRAc7wsuWYAZ8lIyg==
       - name: SOURCE_RPC_URL
-        value: pGJwa1gg37A75hVhjtbIQZ3PMZLkDdvHna/FFO4GntZd7y17yAhkbmFtZVgejNzd5K3CV8hUmbBRFgIcqFr/MdwVOhZpBI1E1QdRZW5vbmNlT/TP1UkyJpo+VkXw6gLAomV2YWx1ZVhVNFj0u1WY0aX64+zjbx9oraDswVTbsYcqtGBXqlI+vG4DE7VyiGE/BJy0xSMcSDNJH6KP3sUx+fPYUOEKYm8EQ4njKIiK2tPb2Yn+aoIDG8tHq2+kTw==
+        value: pGJwa1ggt6Iwtcl5y+qPtJXoWRxHusj+WF5fHhwWyJpsa/qlGDxkbmFtZVgeCJL7+cMa7uaEhYFcpconGmdTCWxQETRbiaFtKEkGZW5vbmNlTwABh7BD9wLknTVj5n0WwWV2YWx1ZVhW8aNatiaB5j6FFjLs95fPmmD4q61adZW5SXeQo0cpY94KvWPaPMvTPubGvxc5KmAkr1X2XgTAmIVh/0QAqBxW926aTjEqA5jOxEMSdGcosCXrCEC4Vw8=
       - name: TARGET_RPC_URL
-        value: pGJwa1gg4bhleyNEIOg6qfhS56oR5t7cre0BNC+7gIS60J5vGGNkbmFtZVgeoeIQvkXBbYibeymLTgfO3aQclbRigAPRk5LMuQ43ZW5vbmNlT0WGEfvflESa7auLlgNyR2V2YWx1ZVgxdhPBN5/JZOgjXB8EYeKHWxsid4DSnk/5giLW7fUnZR2hVNNiGpYaIv2rDAfIXdautQ==
+        value: pGJwa1ggmfEjSv7G3AuZaalGBk1fYdTLhI7XRgFeFZboWz48JT5kbmFtZVgeEaeKSrQ89JY8i28aqGz51kIbKC7Qw4poko/xH/GeZW5vbmNlT4RNs+aAPjIMSHkhP1EqvmV2YWx1ZVgpiMp7G7AP+lQtpu70JCBt3Y/B+ciscdKk82insPz82hkuMCQwGK7SfYg=
+    machines:
+      default:
+        provider: oasis1qzc8pldvm8vm3duvdrj63wgvkw34y9ucfcxzetqr
+        offer: medium
+        id: 000000000000006c

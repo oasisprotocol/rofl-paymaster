@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/rube-de/paymaster-relayer:latest
+    image: ghcr.io/oasisprotocol/paymaster-relayer:latest
     platform: linux/amd64
     container_name: paymaster_relayer
     environment:

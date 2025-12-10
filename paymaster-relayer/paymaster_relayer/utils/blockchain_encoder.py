@@ -61,6 +61,7 @@ class BlockchainEncoder:
         RLP encode a transaction receipt with proper type handling.
 
         Handles both legacy (type 0) and typed transactions (EIP-2718).
+        Supports OP Stack deposit transactions (type 0x7e) with Canyon upgrade.
 
         Args:
             receipt: Transaction receipt to encode
@@ -68,7 +69,7 @@ class BlockchainEncoder:
         Returns:
             RLP encoded receipt with type prefix if needed
         """
-        # Get transaction type (0 for legacy, 2 for EIP-1559, etc.)
+        # Get transaction type (0 for legacy, 2 for EIP-1559, 0x7e for OP deposit)
         tx_type = int(receipt.get("type", 0))
 
         # Encode receipt fields
@@ -86,8 +87,34 @@ class BlockchainEncoder:
             ]
             encoded_logs.append(encoded_log)
 
-        # Create receipt tuple
+        # Create base receipt tuple
         receipt_data = [status, cumulative_gas, logs_bloom, encoded_logs]
+
+        # Handle OP Stack deposit transactions (type 0x7e/126)
+        # After Canyon upgrade, deposit receipts include additional fields:
+        # RLP([status, cumulativeGasUsed, logsBloom, logs, depositNonce, depositReceiptVersion])
+        # See: https://specs.optimism.io/protocol/deposits.html
+        if tx_type == 126:  # 0x7e - OP Stack deposit transaction
+            deposit_receipt_version = receipt.get("depositReceiptVersion")
+            if deposit_receipt_version is not None:
+                # Canyon+ deposit receipt: append depositNonce and depositReceiptVersion
+                deposit_nonce = receipt.get("depositNonce")
+                if deposit_nonce is not None:
+                    # Convert from hex string to int if needed (web3.py may return hex strings)
+                    if isinstance(deposit_nonce, str):
+                        deposit_nonce = int(deposit_nonce, 16)
+                    if isinstance(deposit_receipt_version, str):
+                        deposit_receipt_version = int(deposit_receipt_version, 16)
+                    receipt_data.append(deposit_nonce)
+                    receipt_data.append(deposit_receipt_version)
+                    logger.debug(
+                        f"Encoding Canyon deposit receipt with nonce={deposit_nonce}, version={deposit_receipt_version}"
+                    )
+                else:
+                    logger.warning(
+                        f"depositReceiptVersion={deposit_receipt_version} but depositNonce missing"
+                    )
+
         encoded = rlp.encode(receipt_data)
 
         # Add transaction type prefix for typed transactions
