@@ -37,6 +37,7 @@ class MonitoringConfig:
     retry_count: int = 3
     lookback_blocks: int = 9
     process_batch_size: int = 10  # max events to process in one batch
+    max_block_range: int = 10  # max blocks per get_logs request (Alchemy free tier limit)
 
     def __post_init__(self) -> None:
         """Validate monitoring configuration."""
@@ -77,6 +78,16 @@ class MonitoringConfig:
         if self.process_batch_size > 100:
             raise ValueError(
                 f"Batch size too large (max 100), got {self.process_batch_size}"
+            )
+
+        # Validate max block range
+        if self.max_block_range <= 0:
+            raise ValueError(
+                f"Max block range must be positive, got {self.max_block_range}"
+            )
+        if self.max_block_range > 10000:
+            raise ValueError(
+                f"Max block range too large (max 10000), got {self.max_block_range}"
             )
 
 @dataclass(frozen=True, slots=True)
@@ -145,8 +156,9 @@ class RelayerConfig:
                 "This is used to sign transactions on the target chain"
             )
 
-        # Monitoring configuration with hard-coded defaults
-        monitoring_config = MonitoringConfig()
+        # Monitoring configuration - parse optional env vars with defaults
+        max_block_range = int(os.environ.get("MAX_BLOCK_RANGE", "10"))
+        monitoring_config = MonitoringConfig(max_block_range=max_block_range)
 
         # Create configuration objects
         source_chain = SourceChainConfig(
@@ -190,4 +202,5 @@ class RelayerConfig:
         print(f"  Retry Count: {self.monitoring.retry_count}")
         print(f"  Lookback Blocks: {self.monitoring.lookback_blocks}")
         print(f"  Batch Size: {self.monitoring.process_batch_size}")
+        print(f"  Max Block Range: {self.monitoring.max_block_range}")
         print("===================================\n")

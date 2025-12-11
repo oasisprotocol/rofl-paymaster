@@ -28,8 +28,8 @@ interface ICrossChainPaymaster {
 
     /**
      * @notice Emitted when the ROSE/USD feed is updated
-     * @param oldFeed Previous ROSE/USD feed address
-     * @param newFeed New ROSE/USD feed address
+     * @param oldFeed Previous price feed address
+     * @param newFeed New price feed address
      */
     event RoseUsdFeedUpdated(address indexed oldFeed, address indexed newFeed);
 
@@ -89,6 +89,7 @@ interface ICrossChainPaymaster {
     error ZeroAddress();
     error InvalidAmount();
     error InsufficientBalance(uint256 available, uint256 required);
+    error NoRoseUsdFeed();
 
     /**
      * @notice Process a PaymentInitiated event proof and distribute ROSE (permissionless)
@@ -127,9 +128,10 @@ interface ICrossChainPaymaster {
     function priceFeeds(address token) external view returns (AggregatorV3Interface);
 
     /**
-     * @notice Returns the ROSE/USD price feed
+     * @notice Returns the ROSE/USD price feed address
+     * @return The price feed address
      */
-    function roseUsdFeed() external view returns (AggregatorV3Interface);
+    function roseUsdFeed() external view returns (address);
 
     /**
      * @notice Returns the decimals for a given token
@@ -155,13 +157,13 @@ interface ICrossChainPaymaster {
     /**
      * @notice Sets the price feed for a specific token
      * @param token The token address
-     * @param feed The Chainlink price feed address
+     * @param feed The price feed address
      */
     function setPriceFeed(address token, address feed) external;
 
     /**
      * @notice Sets the ROSE/USD price feed
-     * @param feed The Chainlink price feed address for ROSE/USD
+     * @param feed The price feed address
      */
     function setRoseUsdFeed(address feed) external;
 

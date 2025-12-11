@@ -42,6 +42,12 @@ contract CrossChainPaymaster is
         )
     );
 
+    /**
+     * @notice Standard decimal scale for normalizing ROSE/USD feed prices
+     * @dev All feed prices are normalized to this scale before averaging
+     */
+    uint8 internal constant NORMALIZED_DECIMALS = 18;
+
     // ---------------------------------------------------------------------
     // Storage
     // ---------------------------------------------------------------------
@@ -53,9 +59,10 @@ contract CrossChainPaymaster is
     mapping(address => AggregatorV3Interface) public priceFeeds;
 
     /**
-     * @notice ROSE/USD price feed (USD per 1 ROSE)
+     * @notice ROSE/USD price feed address (USD per 1 ROSE)
+     * @dev Single aggregated feed from ROFL price oracle
      */
-    AggregatorV3Interface public roseUsdFeed;
+    address public roseUsdFeed;
 
     /**
      * @notice Token decimal mappings (token => decimals)
@@ -97,7 +104,7 @@ contract CrossChainPaymaster is
      * @param _shoyuBashi Hashi ShoyuBashi contract address
      * @param _limits Distribution limits for payments
      * @param _stalenessThreshold Maximum age for price data in seconds
-     * @param _roseUsdFeed Chainlink Aggregator for ROSE/USD
+     * @param _roseUsdFeed Price feed address for ROSE/USD
      */
     function initialize(
         address _owner,
@@ -114,8 +121,9 @@ contract CrossChainPaymaster is
         stalenessThreshold = _stalenessThreshold;
         limits = _limits;
 
+        // Require ROSE/USD feed
         if (_roseUsdFeed == address(0)) revert InvalidPriceFeed();
-        roseUsdFeed = AggregatorV3Interface(_roseUsdFeed);
+        roseUsdFeed = _roseUsdFeed;
 
         // Transfer ownership to requested owner if different
         if (_owner != owner()) {
@@ -143,8 +151,9 @@ contract CrossChainPaymaster is
      */
     function setRoseUsdFeed(address feed) external onlyOwner override {
         if (feed == address(0)) revert InvalidPriceFeed();
-        emit RoseUsdFeedUpdated(address(roseUsdFeed), feed);
-        roseUsdFeed = AggregatorV3Interface(feed);
+        address oldFeed = roseUsdFeed;
+        roseUsdFeed = feed;
+        emit RoseUsdFeedUpdated(oldFeed, feed);
     }
 
     /**
@@ -365,6 +374,7 @@ contract CrossChainPaymaster is
 
     /**
      * @notice Converts token amount to ROSE amount using Chainlink-style price feeds
+     * @dev Uses single aggregated ROSE/USD feed from ROFL price oracle
      * @param token The token address
      * @param tokenAmount The amount of tokens to convert
      * @return roseAmount The equivalent amount in ROSE
@@ -372,29 +382,44 @@ contract CrossChainPaymaster is
     function _convertToRose(address token, uint256 tokenAmount) internal view returns (uint256 roseAmount) {
         AggregatorV3Interface tokenUsd = priceFeeds[token];
         if (address(tokenUsd) == address(0)) revert NoPriceFeedForToken(token);
-        if (address(roseUsdFeed) == address(0)) revert InvalidPriceFeed();
+        if (roseUsdFeed == address(0)) revert NoRoseUsdFeed();
 
+        // Get token price data
         (uint80 tRound, int256 tPrice, , uint256 tUpdated, uint80 tAnsweredIn) = tokenUsd.latestRoundData();
-        (uint80 rRound, int256 rPrice, , uint256 rUpdated, uint80 rAnsweredIn) = roseUsdFeed.latestRoundData();
 
-        // Validate prices & rounds
+        // Validate token price
         if (tPrice <= 0) revert InvalidPrice(tPrice);
-        if (rPrice <= 0) revert InvalidPrice(rPrice);
-        if (tAnsweredIn < tRound || rAnsweredIn < rRound) revert StalePrice(0, 0);
+        if (tAnsweredIn < tRound) revert StalePrice(0, 0);
         if (tUpdated == 0 || block.timestamp - tUpdated > stalenessThreshold) revert StalePrice(tUpdated, stalenessThreshold);
+
+        // Get ROSE/USD price (single aggregated feed from ROFL oracle)
+        AggregatorV3Interface roseFeed = AggregatorV3Interface(roseUsdFeed);
+        (uint80 rRound, int256 rPrice, , uint256 rUpdated, uint80 rAnsweredIn) = roseFeed.latestRoundData();
+
+        // Validate ROSE price
+        if (rPrice <= 0) revert InvalidPrice(rPrice);
+        if (rAnsweredIn < rRound) revert StalePrice(0, 0);
         if (rUpdated == 0 || block.timestamp - rUpdated > stalenessThreshold) revert StalePrice(rUpdated, stalenessThreshold);
 
         uint8 tokenDec = tokenDecimals[token];
         if (tokenDec == 0) tokenDec = 18;
-
         uint8 tDec = tokenUsd.decimals();
-        uint8 rDec = roseUsdFeed.decimals();
+        uint8 rDec = roseFeed.decimals();
+
+        // Normalize ROSE price to 18 decimals
+        uint256 normalizedRosePrice;
+        if (rDec < NORMALIZED_DECIMALS) {
+            normalizedRosePrice = uint256(rPrice) * (10 ** (NORMALIZED_DECIMALS - rDec));
+        } else if (rDec > NORMALIZED_DECIMALS) {
+            normalizedRosePrice = uint256(rPrice) / (10 ** (rDec - NORMALIZED_DECIMALS));
+        } else {
+            normalizedRosePrice = uint256(rPrice);
+        }
 
         // roseAmount = tokenAmount * (tokenUsd / roseUsd) adjusted to 18 decimals
-        // = tokenAmount * tPrice * 10^rDec * 10^18 / (10^tokenDec * 10^tDec * rPrice)
         uint256 num = Math.mulDiv(tokenAmount, uint256(tPrice), 10 ** tokenDec);
-        num = Math.mulDiv(num, 10 ** rDec, 10 ** tDec);
-        roseAmount = Math.mulDiv(num, 1e18, uint256(rPrice));
+        num = Math.mulDiv(num, 10 ** NORMALIZED_DECIMALS, 10 ** tDec);
+        roseAmount = Math.mulDiv(num, 1e18, normalizedRosePrice);
     }
 
     /// @notice Accepts ROSE funding

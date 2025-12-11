@@ -66,6 +66,7 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 .env.production
+.env.testnet
 
 # Temporary files
 tmp/
@@ -95,6 +96,9 @@ dmypy.json
 
 # wake
 /.wake/
+
+# beads
+.beads/
 
 # Configuration files that might contain secrets
 config.local.*

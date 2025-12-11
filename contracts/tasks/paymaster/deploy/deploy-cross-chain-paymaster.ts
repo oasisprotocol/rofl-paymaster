@@ -27,11 +27,16 @@ task("deploy:cross-chain-paymaster", "Deploy CrossChainPaymaster (UUPS)")
     const enabledStr = (args.enabled || process.env.LIMITS_ENABLED || "true").toLowerCase();
     const enabled = enabledStr === "true";
     const staleness = parseInt(args.stale || process.env.PRICE_STALENESS_SECONDS || "3600", 10);
-    const roseUsd = args.roseusd || process.env.ROSE_USD_FEED;
+    const roseUsdFeed = args.roseusd || process.env.ROSE_USD_FEED;
 
     if (!owner) throw new Error("Missing owner: pass --owner or set OWNER env");
     if (!shoyubashi) throw new Error("Missing ShoyuBashi: pass --shoyubashi or set SHOYU_BASHI env");
-    if (!roseUsd) throw new Error("Missing ROSE/USD feed: pass --roseusd or set ROSE_USD_FEED env");
+    if (!roseUsdFeed) throw new Error("Missing ROSE/USD feed: pass --roseusd or set ROSE_USD_FEED env");
+
+    // Validate address
+    if (!/^0x[a-fA-F0-9]{40}$/.test(roseUsdFeed)) {
+      throw new Error(`Invalid ROSE/USD feed address: ${roseUsdFeed}`);
+    }
 
     const limits = {
       dailyLimit: ethers.parseUnits(daily, 18),
@@ -45,13 +50,13 @@ task("deploy:cross-chain-paymaster", "Deploy CrossChainPaymaster (UUPS)")
     console.log("Owner:", owner);
     console.log("ShoyuBashi:", shoyubashi);
     console.log("Staleness:", staleness, "seconds");
-    console.log("ROSE/USD feed:", roseUsd);
+    console.log("ROSE/USD feed:", roseUsdFeed);
     console.log("Limits:", limits);
 
     const CrossChainPaymaster = await ethers.getContractFactory("CrossChainPaymaster");
     const proxy = await upgrades.deployProxy(
       CrossChainPaymaster,
-      [owner, shoyubashi, limits, staleness, roseUsd],
+      [owner, shoyubashi, limits, staleness, roseUsdFeed],
       { kind: "uups", initializer: "initialize" }
     );
 

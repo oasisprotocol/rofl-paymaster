@@ -121,7 +121,7 @@ class RoflUtility:
                 "data": {
                     "gas_limit": tx["gas"],
                     "to": tx["to"].removeprefix("0x"),
-                    "value": tx["value"],
+                    "value": str(tx["value"]),
                     "data": tx["data"].removeprefix("0x"),
                 },
             },

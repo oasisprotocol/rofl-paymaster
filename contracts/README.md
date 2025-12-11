@@ -47,8 +47,10 @@ cp .env.example .env
 | `PRIVATE_KEY` | No | Deployer/signing key for Hardhat networks; defaults to test mnemonic if unset. |
 | `ALCHEMY_API_KEY` | No | Used for Hardhat mainnet fork and default RPC hints in `post-blockhash`. |
 | `OWNER` | Yes | Owner address for `deploy:cross-chain-paymaster`. |
-| `PRICE_ORACLE` | Yes | Price oracle address on Sapphire; used by deploy and oracle config tasks. |
-| `SHOYU_shellI` | Yes | Shoyushelli address on Sapphire. |
+| `SHOYU_BASHI` | Yes | ShoyuBashi address on Sapphire for block header verification. |
+| `ROSE_USD_FEEDS` | Yes | Comma-separated list of ROSE/USD price feed addresses (e.g., `0xFeed1,0xFeed2,0xFeed3`). Min 1 required, 3+ recommended for production (median aggregation). |
+| `PRICE_STALENESS_SECONDS` | No | Price staleness threshold in seconds (default `3600`). |
+| `TOKEN_USD_FEED` | Yes (vault config) | Token/USD price feed address for PaymasterVault token configuration. |
 | `DAILY_LIMIT_ROSE` | No | Daily ROSE distribution limit for CrossChainPaymaster (default `10000`). |
 | `PER_TX_LIMIT_ROSE` | No | Per-transaction ROSE limit for CrossChainPaymaster (default `100`). |
 | `LIMITS_ENABLED` | No | Enable/disable distribution limits (default `true`). |
@@ -84,8 +86,9 @@ bun hardhat deploy:cross-chain-paymaster --network sapphire-testnet
 # Custom params
 bun hardhat deploy:cross-chain-paymaster \
   --owner 0x... \
-  --oracle 0x... \
-  --shoyushelli 0x... \
+  --shoyubashi 0x... \
+  --roseusd 0xFeed1,0xFeed2,0xFeed3 \
+  --stale 3600 \
   --daily 50000 \
   --pertx 500 \
   --enabled true \
@@ -107,12 +110,22 @@ bun hardhat deploy:paymaster-vault \
   --network eth-sepolia
 ```
 
-### 3) Deploy Mock Oracle (testing)
+### 3) Deploy Mock Price Feeds (testing)
+
+Deploy Chainlink-compatible mock price feeds for testing ROSE/USD conversion:
 
 ```shell
+# Deploy mock ROSE/USD feed #1 (default: 18 decimals, price = 1)
+bun hardhat deploy:mock-oracle --network sapphire-testnet
+
+# Deploy with custom price (e.g., 0.05 for $0.05/ROSE)
 bun hardhat deploy:mock-oracle \
-  --paymaster 0x<PAYMASTER_PROXY> \
+  --price 0.05 \
+  --decimals 18 \
   --network sapphire-testnet
+
+# For production-like testing, deploy 3+ feeds with varied prices
+# Then configure CrossChainPaymaster with --roseusd feed1,feed2,feed3
 ```
 
 ## Configuration
@@ -156,23 +169,14 @@ bun hardhat configure:paymaster-vault \
   --network eth-sepolia
 ```
 
-### Mock Oracle (testing)
+### Price Feed Management
 
-```shell
-# Add token feed at price=1 ROSE
-bun hardhat oracle:addtokenfeed \
-  --oracle 0x<ORACLE_ADDRESS> \
-  --token 0x<USDC_ADDRESS> \
-  --decimals 6 \
-  --price 1 \
-  --network sapphire-testnet
+CrossChainPaymaster uses ROSE/USD price feeds configured at deployment. To
+update feeds after deployment, use the upgrade or configure tasks with new feed
+addresses.
 
-# Remove token feed
-bun hardhat oracle:removetokenfeed \
-  --oracle 0x<ORACLE_ADDRESS> \
-  --token 0x<USDC_ADDRESS> \
-  --network sapphire-testnet
-```
+For testing with mock feeds, deploy multiple `MockV3Aggregator` instances (see
+deployment section above) and configure them via the `--roseusd` parameter.
 
 ## Flow: Deposit → Proof → Relay
 
