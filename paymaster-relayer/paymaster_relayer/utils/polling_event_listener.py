@@ -25,6 +25,7 @@ class PollingEventListener:
         event_name: str,
         abi: list[dict[str, Any]],
         lookback_blocks: int = 100,
+        max_block_range: int | None = None,
     ):
         """
         Initialize the polling event listener.
@@ -35,11 +36,13 @@ class PollingEventListener:
             event_name: Name of the event to listen for
             abi: Contract ABI
             lookback_blocks: Number of blocks to look back on startup
+            max_block_range: Max blocks per get_logs request (None = no limit)
         """
         self.rpc_url = rpc_url
         self.contract_address = Web3.to_checksum_address(contract_address)
         self.event_name = event_name
         self.lookback_blocks = lookback_blocks
+        self.max_block_range = max_block_range
 
         # Initialize Web3 connection
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
@@ -59,6 +62,35 @@ class PollingEventListener:
         # Setup logging
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
+    def _get_logs_chunked(self, from_block: int, to_block: int) -> list[EventData]:
+        """
+        Fetch logs in chunks to respect RPC provider block range limits.
+
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number (inclusive)
+
+        Returns:
+            List of all events across the block range
+        """
+        if self.max_block_range is None or to_block - from_block < self.max_block_range:
+            # No chunking needed
+            return list(self.event_obj.get_logs(from_block=from_block, to_block=to_block))
+
+        all_events: list[EventData] = []
+        current_from = from_block
+
+        while current_from <= to_block:
+            current_to = min(current_from + self.max_block_range - 1, to_block)
+            self.logger.debug(
+                f"Fetching logs chunk: blocks {current_from}-{current_to}"
+            )
+            events = self.event_obj.get_logs(from_block=current_from, to_block=current_to)
+            all_events.extend(events)
+            current_from = current_to + 1
+
+        return all_events
+
     async def initial_sync(self, callback: Callable[[EventData], Any]) -> None:
         """
         Perform initial sync to catch up on recent events.
@@ -75,10 +107,8 @@ class PollingEventListener:
                 f"from block {from_block} to {current_block}"
             )
 
-            # Get historical events using web3 v7 API
-            events = self.event_obj.get_logs(
-                from_block=from_block, to_block=current_block
-            )
+            # Get historical events (chunked if max_block_range is set)
+            events = self._get_logs_chunked(from_block, current_block)
 
             if events:
                 self.logger.info(
@@ -116,10 +146,8 @@ class PollingEventListener:
                 else current_block
             )
 
-            # Get new events
-            events = self.event_obj.get_logs(
-                from_block=from_block, to_block=current_block
-            )
+            # Get new events (chunked if max_block_range is set)
+            events = self._get_logs_chunked(from_block, current_block)
 
             if events:
                 self.logger.info(

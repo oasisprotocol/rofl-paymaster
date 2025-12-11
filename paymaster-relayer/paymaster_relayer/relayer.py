@@ -117,6 +117,7 @@ class ROFLRelayer:
             event_name="PaymentInitiated",
             abi=paymaster_vault_abi,
             lookback_blocks=self.config.monitoring.lookback_blocks,
+            max_block_range=self.config.monitoring.max_block_range,
         )
 
         logger.info(
@@ -130,6 +131,7 @@ class ROFLRelayer:
             event_name="HashStored",
             abi=rofl_adapter_abi,
             lookback_blocks=self.config.monitoring.lookback_blocks,
+            max_block_range=self.config.monitoring.max_block_range,
         )
         logger.info(
             f"ROFLAdapter listener: {self.config.target_chain.rofl_adapter_address}"
