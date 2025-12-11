@@ -1,7 +1,8 @@
-import { keccak256, AbiCoder, zeroPadValue, toBeHex } from "ethers";
+import { keccak256, AbiCoder, zeroPadValue, toBeHex, encodeRlp, getBytes } from "ethers";
 
 /**
- * Helper functions for creating mock receipt proofs
+ * Helper functions for creating mock receipt proofs.
+ * Uses ethers v6's native RLP encoding for correctness and maintainability.
  */
 
 // PaymentInitiated event signature
@@ -65,7 +66,8 @@ export function createMockReceiptProof(params: {
 }
 
 /**
- * Encodes a mock log entry in RLP format
+ * Encodes a mock log entry in RLP format.
+ * RLP log structure: [address, topics[], data]
  * @param vault Vault address
  * @param payer Payer address
  * @param recipient Recipient address
@@ -95,78 +97,17 @@ function encodeMockLog(
   const data = abiCoder.encode(["uint256", "bytes32"], [amount, paymentId]);
 
   // Encode as RLP: [address, topics[], data]
-  // For simplicity, we'll use a basic hex encoding that mimics RLP structure
-  // In a real implementation, you'd use a proper RLP library
-
-  // This is a simplified version - in production tests, you'd use actual RLP encoding
-  const addressRlp = encodeRlpBytes(vault);
-  const topicsRlp = encodeRlpList(topics.map((t) => encodeRlpBytes(t)));
-  const dataRlp = encodeRlpBytes(data);
-
-  return encodeRlpList([addressRlp, topicsRlp, dataRlp]);
+  // ethers.encodeRlp handles nested arrays and bytes correctly
+  return encodeRlp([getBytes(vault), topics.map((t) => getBytes(t)), getBytes(data)]);
 }
 
 /**
- * Simple RLP encoding for bytes (simplified - use rlp library for production)
- */
-function encodeRlpBytes(data: string): string {
-  // Remove 0x prefix if present
-  const hex = data.startsWith("0x") ? data.slice(2) : data;
-  const bytes = Buffer.from(hex, "hex");
-
-  if (bytes.length === 1 && bytes[0] < 0x80) {
-    return "0x" + hex;
-  } else if (bytes.length < 56) {
-    const prefix = (0x80 + bytes.length).toString(16).padStart(2, "0");
-    return "0x" + prefix + hex;
-  } else {
-    const lengthHex = bytes.length.toString(16);
-    const lengthOfLength = Math.ceil(lengthHex.length / 2);
-    const prefix = (0xb7 + lengthOfLength).toString(16).padStart(2, "0");
-    return "0x" + prefix + lengthHex.padStart(lengthOfLength * 2, "0") + hex;
-  }
-}
-
-/**
- * Simple RLP encoding for lists (simplified - use rlp library for production)
- */
-function encodeRlpList(items: string[]): string {
-  const concatenated = items.map((item) => item.slice(2)).join("");
-  const totalLength = concatenated.length / 2;
-
-  if (totalLength < 56) {
-    const prefix = (0xc0 + totalLength).toString(16).padStart(2, "0");
-    return "0x" + prefix + concatenated;
-  } else {
-    const lengthHex = totalLength.toString(16);
-    const lengthOfLength = Math.ceil(lengthHex.length / 2);
-    const prefix = (0xf7 + lengthOfLength).toString(16).padStart(2, "0");
-    return "0x" + prefix + lengthHex.padStart(lengthOfLength * 2, "0") + concatenated;
-  }
-}
-
-/**
- * Encodes a uint as RLP (simplified)
+ * Encodes a uint as RLP using ethers native encoding.
+ * RLP encodes 0 as 0x80 (empty byte string), otherwise as minimal byte representation.
  */
 function encodeRlpUint(value: number): string {
-  if (value === 0) return "0x80";
-
-  let hex = value.toString(16);
-  if (hex.length % 2 !== 0) hex = "0" + hex;
-
-  const bytes = Buffer.from(hex, "hex");
-
-  if (bytes.length === 1 && bytes[0] < 0x80) {
-    return "0x" + hex;
-  } else if (bytes.length < 56) {
-    const prefix = (0x80 + bytes.length).toString(16).padStart(2, "0");
-    return "0x" + prefix + hex;
-  } else {
-    const lengthHex = bytes.length.toString(16);
-    const lengthOfLength = Math.ceil(lengthHex.length / 2);
-    const prefix = (0xb7 + lengthOfLength).toString(16).padStart(2, "0");
-    return "0x" + prefix + lengthHex.padStart(lengthOfLength * 2, "0") + hex;
-  }
+  if (value === 0) return encodeRlp(new Uint8Array(0));
+  return encodeRlp(getBytes(toBeHex(value)));
 }
 
 /**
