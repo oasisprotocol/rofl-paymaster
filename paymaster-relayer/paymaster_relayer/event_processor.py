@@ -215,8 +215,15 @@ class EventProcessor:
                 payment_event, paymaster_address
             )
 
+            if tx_hash is None:
+                logger.warning(
+                    f"Proof submission failed for tx {payment_event.tx_hash}, "
+                    "will retry on next cycle"
+                )
+                return
+
             logger.info(f"Proof submitted successfully: {tx_hash}")
-            # Remove from pending structures
+            # Remove from pending structures only on success
             block_payments = self.pending_payments.get(payment_event.block_number, [])
             if payment_event in block_payments:
                 block_payments.remove(payment_event)

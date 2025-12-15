@@ -361,6 +361,8 @@ contract CrossChainPaymaster is
      */
     function _decodeRlpUint(bytes memory rlp) internal pure returns (uint256) {
         bytes memory b = rlp.toRLPItem().readBytes();
+        // Guard: uint256 can only hold 32 bytes max; larger values cause overflow
+        if (b.length > 32) revert InvalidEvent();
         uint256 number;
         for (uint256 i = 0; i < b.length; i++) {
             number = number + uint256(uint8(b[i])) * (2 ** (8 * (b.length - (i + 1))));
@@ -390,7 +392,8 @@ contract CrossChainPaymaster is
         // Validate token price
         if (tPrice <= 0) revert InvalidPrice(tPrice);
         if (tAnsweredIn < tRound) revert StalePrice(0, 0);
-        if (tUpdated == 0 || (block.timestamp > tUpdated && block.timestamp - tUpdated > stalenessThreshold)) revert StalePrice(tUpdated, stalenessThreshold);
+        if (tUpdated > block.timestamp) revert FuturePriceTimestamp(tUpdated, block.timestamp);
+        if (tUpdated == 0 || block.timestamp - tUpdated > stalenessThreshold) revert StalePrice(tUpdated, stalenessThreshold);
 
         // Get ROSE/USD price (single aggregated feed from ROFL oracle)
         AggregatorV3Interface roseFeed = AggregatorV3Interface(roseUsdFeed);
@@ -399,7 +402,8 @@ contract CrossChainPaymaster is
         // Validate ROSE price
         if (rPrice <= 0) revert InvalidPrice(rPrice);
         if (rAnsweredIn < rRound) revert StalePrice(0, 0);
-        if (rUpdated == 0 || (block.timestamp > rUpdated && block.timestamp - rUpdated > stalenessThreshold)) revert StalePrice(rUpdated, stalenessThreshold);
+        if (rUpdated > block.timestamp) revert FuturePriceTimestamp(rUpdated, block.timestamp);
+        if (rUpdated == 0 || block.timestamp - rUpdated > stalenessThreshold) revert StalePrice(rUpdated, stalenessThreshold);
 
         uint8 tokenDec = tokenDecimals[token];
         if (tokenDec == 0) tokenDec = 18;
