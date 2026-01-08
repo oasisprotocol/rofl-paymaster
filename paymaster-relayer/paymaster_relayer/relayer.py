@@ -33,6 +33,7 @@ class ROFLRelayer:
     """
 
     STATUS_LOG_INTERVAL = 30  # seconds
+    RETRY_PENDING_INTERVAL = 30  # seconds between retry attempts
 
     def __init__(self, config: RelayerConfig):
         """
@@ -149,6 +150,14 @@ class ROFLRelayer:
                     f"{stats['stored_hashes']} hashes stored"
                 )
 
+    async def _periodic_retry_pending(self) -> None:
+        """Periodically retry pending payments that have hashes stored."""
+        while self.running:
+            await asyncio.sleep(self.RETRY_PENDING_INTERVAL)
+            retried = await self.event_processor.retry_pending_payments()
+            if retried > 0:
+                logger.info(f"Retried {retried} pending payment(s)")
+
     async def _check_task_health(self, tasks: dict[str, asyncio.Task]) -> bool:
         """Check if any critical task has failed."""
         for name, task in tasks.items():
@@ -201,6 +210,7 @@ class ROFLRelayer:
                     )
                 ),
                 "status": asyncio.create_task(self._periodic_status_logger()),
+                "retry": asyncio.create_task(self._periodic_retry_pending()),
             }
 
             logger.info("Event monitoring started, waiting for events...")

@@ -24,9 +24,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# FuturePriceTimestamp error from CrossChainPaymaster.sol
 FUTURE_PRICE_TIMESTAMP_ERROR_B64 = "4B8j6Q"
 FUTURE_PRICE_RETRY_DELAY = 6  # seconds to wait before retry
 FUTURE_PRICE_MAX_RETRIES = 3  # maximum retry attempts
+
+# DuplicatePayment error from CrossChainPaymaster.sol
+DUPLICATE_PAYMENT_ERROR_B64 = "3zO4b"
 
 
 class ProofManager:
@@ -241,7 +245,14 @@ class ProofManager:
                         return None
                 except Exception as e:
                     error_msg = str(e)
-                    if FUTURE_PRICE_TIMESTAMP_ERROR_B64 in error_msg:
+                    if DUPLICATE_PAYMENT_ERROR_B64 in error_msg:
+                        # Payment already processed - treat as success
+                        logger.info(
+                            "DuplicatePayment error - payment was already processed, "
+                            "marking as complete"
+                        )
+                        return "ALREADY_PROCESSED"
+                    elif FUTURE_PRICE_TIMESTAMP_ERROR_B64 in error_msg:
                         remaining = FUTURE_PRICE_MAX_RETRIES - attempt - 1
                         if remaining > 0:
                             logger.warning(
