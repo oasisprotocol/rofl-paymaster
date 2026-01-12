@@ -17,6 +17,7 @@ import {
   ValidationDataCurrent,
   StorageLayout,
 } from "@openzeppelin/upgrades-core";
+import { waitForNonce } from "./nonce";
 
 export const CREATEX_ADDRESS = "0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed";
 
@@ -171,6 +172,9 @@ export async function deployUUPSProxy(
 
   // Deploy proxy
   console.log(`\nDeploying proxy...`);
+  const proxyNonce = await waitForNonce(provider, await signer.getAddress(), implTx.nonce + 1);
+  const proxyOverrides = { ...txOverrides, nonce: proxyNonce };
+
   const proxyArtifact = JSON.parse(
     fs.readFileSync(
       path.join(hre.config.paths.root, "node_modules/@openzeppelin/contracts/build/contracts/ERC1967Proxy.json"),
@@ -181,7 +185,7 @@ export async function deployUUPSProxy(
   const proxyArgs = ethers.AbiCoder.defaultAbiCoder().encode(["address", "bytes"], [implAddress, initData]);
   const proxyInitCode = ethers.concat([proxyArtifact.bytecode, proxyArgs]);
 
-  const proxyTx = await createX.deployCreate3(salts.proxy, proxyInitCode, txOverrides);
+  const proxyTx = await createX.deployCreate3(salts.proxy, proxyInitCode, proxyOverrides);
   const proxyReceipt = await proxyTx.wait();
   const proxyAddress = parseContractCreation(proxyReceipt!, createX.interface);
   await waitForCode(provider, proxyAddress);

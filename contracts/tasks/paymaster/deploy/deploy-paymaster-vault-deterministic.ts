@@ -1,6 +1,6 @@
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { getDeploymentInfo, deployUUPSProxy } from "../../../lib/deterministic-deployer";
+import { getDeploymentInfo, deployUUPSProxy } from "../../helpers/deterministic-deployer";
 
 task(
   "deploy:paymaster-vault:deterministic",

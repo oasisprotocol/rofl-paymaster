@@ -28,6 +28,11 @@ const config: HardhatUserConfig = {
       chainId: 0x5afd,
       accounts,
     },
+    "eth-mainnet": {
+      url: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts,
+      chainId: 1
+    },
     "arbitrum-mainnet": {
       url: `https://arb-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
       accounts,
