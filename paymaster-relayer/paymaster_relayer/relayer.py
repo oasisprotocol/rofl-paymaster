@@ -8,6 +8,7 @@ and coordinates with the event processor for handling blockchain events.
 import asyncio
 import contextlib
 import logging
+import os
 
 from web3 import Web3
 
@@ -18,8 +19,12 @@ from .utils.contract_utility import ContractUtility
 from .utils.polling_event_listener import PollingEventListener
 from .utils.rofl_utility import RoflUtility
 
+# Get chain name from environment for log prefixing (e.g., "base", "eth", "arb")
+CHAIN_NAME = os.environ.get("CHAIN_NAME", "unknown")
+
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format=f"%(asctime)s - [{CHAIN_NAME}] %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -47,8 +52,13 @@ class ROFLRelayer:
 
         self._init_utilities()
 
+        # Get source chain ID for filtering HashStored events
+        source_chain_id = self.w3_source.eth.chain_id
+
         self.event_processor = EventProcessor(
-            proof_manager=self.proof_manager, config=config
+            proof_manager=self.proof_manager,
+            config=config,
+            source_chain_id=source_chain_id,
         )
         self.payment_listener: PollingEventListener | None = None
         self.hash_listener: PollingEventListener | None = None

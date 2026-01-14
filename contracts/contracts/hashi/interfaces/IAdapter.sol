@@ -10,10 +10,11 @@ interface IAdapter {
 
     /**
      * @dev Emitted when a hash is stored.
-     * @param id - The ID of the stored hash.
+     * @param domain - The domain (chain ID) for the stored hash.
+     * @param id - The ID (block number) of the stored hash.
      * @param hash - The stored hash as bytes32 values.
      */
-    event HashStored(uint256 indexed id, bytes32 indexed hash);
+    event HashStored(uint256 indexed domain, uint256 indexed id, bytes32 indexed hash);
 
     /**
      * @dev Returns the hash for a given ID.

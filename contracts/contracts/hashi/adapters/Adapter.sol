@@ -24,7 +24,7 @@ abstract contract Adapter is IAdapter {
         bytes32 currentHash = _hashes[domain][id];
         if (currentHash != hash) {
             _hashes[domain][id] = hash;
-            emit HashStored(id, hash);
+            emit HashStored(domain, id, hash);
         }
     }
 }

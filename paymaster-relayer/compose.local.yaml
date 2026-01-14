@@ -1,28 +1,60 @@
+# Multi-chain Paymaster Relayer LOCAL configuration
+# For testing without ROFL (uses PRIVATE_KEY)
+
+x-relayer-common: &relayer-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: ghcr.io/oasisprotocol/rofl-paymaster-relayer:multichain-test
+  platform: linux/amd64
+  entrypoint: /bin/sh -c 'uv run python -m paymaster_relayer --local'
+  restart: on-failure
+
+x-common-env: &common-env
+  PYTHONUNBUFFERED: 1
+  TARGET_RPC_URL: ${TARGET_RPC_URL:-https://testnet.sapphire.oasis.io}
+  PAYMASTER_PROXY_ADDRESS: ${PAYMASTER_PROXY_ADDRESS}
+  ROFL_ADAPTER_ADDRESS: ${ROFL_ADAPTER_ADDRESS}
+  PRIVATE_KEY: ${PRIVATE_KEY}
+  # Shared monitoring settings (per-chain POLLING_INTERVAL set in each service)
+  RETRY_COUNT: ${RETRY_COUNT:-3}
+  LOOKBACK_BLOCKS: ${LOOKBACK_BLOCKS:-9}
+  PROCESS_BATCH_SIZE: ${PROCESS_BATCH_SIZE:-10}
+  MAX_BLOCK_RANGE: ${MAX_BLOCK_RANGE:-10}
+
 services:
-  rofl-relayer:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ghcr.io/rube-de/paymaster-relayer:latest
-    platform: linux/amd64
-    container_name: paymaster_relayer_local
-    entrypoint: /bin/sh -c 'uv run python -m paymaster_relayer --local'
-    env_file:
-      - .env
+  # Base Chain Relayer (Chain ID: 8453)
+  # Block time: ~2s → polling: 6s
+  relayer-base:
+    <<: *relayer-common
+    container_name: paymaster_relayer_base_local
     environment:
-      # Python configuration
-      PYTHONUNBUFFERED: 1  # Disable output buffering for immediate log visibility
-      
-      # Source chain configuration (Ethereum/Base Sepolia)
-      SOURCE_RPC_URL: ${SOURCE_RPC_URL:-}  # Required - Source chain RPC endpoint
-      PAYMASTER_VAULT_ADDRESS: ${PAYMASTER_VAULT_ADDRESS:-}  # Required - PaymasterVault contract address
-      
-      # Target chain configuration (Oasis Sapphire)
-      TARGET_RPC_URL: ${TARGET_RPC_URL:-https://testnet.sapphire.oasis.io}  # Required - Oasis RPC endpoint
-      PAYMASTER_PROXY_ADDRESS: ${PAYMASTER_PROXY_ADDRESS:-}  # Required - CrossChainPaymaster contract address
-      ROFL_ADAPTER_ADDRESS: ${ROFL_ADAPTER_ADDRESS:-}  # Required - ROFLAdapter for HashStored
-      
-      # Local mode configuration (for testing without ROFL)
-      PRIVATE_KEY: ${PRIVATE_KEY:-}  # Required in local mode - private key for transactions
-    
-    restart: on-failure
+      <<: *common-env
+      CHAIN_NAME: base
+      SOURCE_RPC_URL: ${BASE_SOURCE_RPC_URL}
+      PAYMASTER_VAULT_ADDRESS: ${BASE_VAULT_ADDRESS}
+      POLLING_INTERVAL: ${BASE_POLLING_INTERVAL:-6}
+
+  # Ethereum Relayer (Chain ID: 1)
+  # Block time: ~12s → polling: 12s (default)
+  relayer-eth:
+    <<: *relayer-common
+    container_name: paymaster_relayer_eth_local
+    environment:
+      <<: *common-env
+      CHAIN_NAME: ethereum
+      SOURCE_RPC_URL: ${ETH_SOURCE_RPC_URL}
+      PAYMASTER_VAULT_ADDRESS: ${ETH_VAULT_ADDRESS}
+      POLLING_INTERVAL: ${ETH_POLLING_INTERVAL:-12}
+
+  # Arbitrum Relayer (Chain ID: 42161)
+  # Block time: ~250ms → polling: 3s
+  relayer-arb:
+    <<: *relayer-common
+    container_name: paymaster_relayer_arb_local
+    environment:
+      <<: *common-env
+      CHAIN_NAME: arbitrum
+      SOURCE_RPC_URL: ${ARB_SOURCE_RPC_URL}
+      PAYMASTER_VAULT_ADDRESS: ${ARB_VAULT_ADDRESS}
+      POLLING_INTERVAL: ${ARB_POLLING_INTERVAL:-3}
