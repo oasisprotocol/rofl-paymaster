@@ -234,6 +234,7 @@ class ProofManager:
             ).build_transaction(tx_params)
 
             # Retry loop for FuturePriceTimestamp errors
+            # Note: No return after loop - all paths return within the loop body
             for attempt in range(FUTURE_PRICE_MAX_RETRIES):
                 try:
                     success = await self.rofl_util.submit_tx(tx_data)
@@ -272,8 +273,6 @@ class ProofManager:
                         # Non-retryable error
                         logger.error(f"ROFL submission failed with error: {error_msg}")
                         return None
-
-            return None
         else:
             # Local mode
             tx_hash = contract.functions.processPayment(receipt_proof_struct).transact(

@@ -154,9 +154,12 @@ class ROFLRelayer:
         """Periodically retry pending payments that have hashes stored."""
         while self.running:
             await asyncio.sleep(self.RETRY_PENDING_INTERVAL)
-            retried = await self.event_processor.retry_pending_payments()
-            if retried > 0:
-                logger.info(f"Retried {retried} pending payment(s)")
+            try:
+                retried = await self.event_processor.retry_pending_payments()
+                if retried > 0:
+                    logger.info(f"Retried {retried} pending payment(s)")
+            except Exception as e:
+                logger.error(f"Error retrying pending payments: {e}", exc_info=True)
 
     async def _check_task_health(self, tasks: dict[str, asyncio.Task]) -> bool:
         """Check if any critical task has failed."""
