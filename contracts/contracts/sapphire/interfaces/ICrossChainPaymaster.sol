@@ -79,6 +79,7 @@ interface ICrossChainPaymaster {
     error InvalidPriceFeed();
     error NoPriceFeedForToken(address token);
     error StalePrice(uint256 timestamp, uint256 threshold);
+    error FuturePriceTimestamp(uint256 priceTimestamp, uint256 blockTimestamp);
     error InvalidPrice(int256 price);
     error ChainDisabled(uint256 chainId);
     error VaultNotAuthorized(uint256 chainId, address vault);

@@ -7,6 +7,7 @@ from collections import OrderedDict
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from paymaster_relayer.event_processor import EventProcessor
+from paymaster_relayer.models import PaymentEvent
 
 
 class TestEventProcessor:
@@ -72,3 +73,78 @@ class TestEventProcessor:
         assert stats["processed_hashes"] == 2
         assert "pending_payments" in stats
         assert "stored_hashes" in stats
+
+    def test_remove_from_pending_returns_true_when_found(self):
+        """Test _remove_from_pending returns True when payment exists."""
+        processor = EventProcessor()
+        payment = PaymentEvent(
+            tx_hash="0xabc123",
+            block_number=100,
+            payer="0x1",
+            recipient="0x2",
+            token="0x3",
+            amount=1000,
+        )
+        processor.pending_payments[100] = [payment]
+        processor.pending_payments_order.append(payment)
+
+        result = processor._remove_from_pending(payment)
+
+        assert result is True
+        assert 100 not in processor.pending_payments
+        assert payment not in processor.pending_payments_order
+
+    def test_remove_from_pending_returns_false_when_not_found(self):
+        """Test _remove_from_pending returns False when payment doesn't exist."""
+        processor = EventProcessor()
+        payment = PaymentEvent(
+            tx_hash="0xabc123",
+            block_number=100,
+            payer="0x1",
+            recipient="0x2",
+            token="0x3",
+            amount=1000,
+        )
+
+        result = processor._remove_from_pending(payment)
+
+        assert result is False
+
+    def test_add_to_pending_is_idempotent(self):
+        """Test _add_to_pending doesn't create duplicates."""
+        processor = EventProcessor()
+        payment = PaymentEvent(
+            tx_hash="0xabc123",
+            block_number=100,
+            payer="0x1",
+            recipient="0x2",
+            token="0x3",
+            amount=1000,
+        )
+
+        # Add twice
+        processor._add_to_pending(payment)
+        processor._add_to_pending(payment)
+
+        assert len(processor.pending_payments[100]) == 1
+        assert len(processor.pending_payments_order) == 1
+
+    async def test_process_matched_payment_skips_if_already_removed(self):
+        """Test that concurrent calls skip if payment already removed (race prevention)."""
+        processor = EventProcessor()
+        payment = PaymentEvent(
+            tx_hash="0xabc123",
+            block_number=100,
+            payer="0x1",
+            recipient="0x2",
+            token="0x3",
+            amount=1000,
+        )
+        # Payment NOT in pending (simulates already removed by another task)
+
+        # Should return False (skipped, not attempted)
+        result = await processor.process_matched_payment(payment)
+
+        assert result is False
+        # Should not be added back (no crash, no side effects)
+        assert 100 not in processor.pending_payments

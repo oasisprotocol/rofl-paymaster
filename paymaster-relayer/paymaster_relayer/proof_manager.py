@@ -5,6 +5,7 @@ This module handles the generation and submission of cryptographic proofs
 for cross-chain message verification using the Hashi protocol format.
 """
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +23,14 @@ if TYPE_CHECKING:
     from .utils.rofl_utility import ROFLUtility
 
 logger = logging.getLogger(__name__)
+
+# FuturePriceTimestamp error from CrossChainPaymaster.sol
+FUTURE_PRICE_TIMESTAMP_ERROR_B64 = "4B8j6Q"
+FUTURE_PRICE_RETRY_DELAY = 6  # seconds to wait before retry
+FUTURE_PRICE_MAX_RETRIES = 3  # maximum retry attempts
+
+# DuplicatePayment error from CrossChainPaymaster.sol
+DUPLICATE_PAYMENT_ERROR_B64 = "3zO4b"
 
 
 class ProofManager:
@@ -176,16 +185,19 @@ class ProofManager:
         )
         return proof
 
-    async def submit_proof(self, proof: list[Any], paymaster_address: str) -> str:
+    async def submit_proof(self, proof: list[Any], paymaster_address: str) -> str | None:
         """
         Submit proof to CrossChainPaymaster contract.
+
+        Includes retry logic for FuturePriceTimestamp errors, which occur when
+        the price oracle's timestamp is slightly ahead of the block timestamp.
 
         Args:
             proof: The generated proof array
             paymaster_address: Address of the CrossChainPaymaster contract
 
         Returns:
-            Transaction hash of the submission
+            Transaction hash of the submission, or None if all retries failed
         """
         logger.info(f"Submitting proof to CrossChainPaymaster at {paymaster_address}")
 
@@ -210,7 +222,7 @@ class ProofManager:
         )
 
         if self.rofl_util:
-            # ROFL mode: build transaction for rofl_util
+            # ROFL mode: build transaction for rofl_util with retry logic
             tx_params: TxParams = {
                 "from": "0x0000000000000000000000000000000000000000",  # ROFL will override
                 "gas": 3000000,
@@ -220,14 +232,47 @@ class ProofManager:
             tx_data = contract.functions.processPayment(
                 receipt_proof_struct
             ).build_transaction(tx_params)
-            success = await self.rofl_util.submit_tx(tx_data)
-            if success:
-                logger.info("Proof submitted successfully via ROFL")
-                # Return a success indicator since ROFL doesn't provide tx hash
-                return "ROFL_SUBMITTED"
-            else:
-                logger.error("Failed to submit proof via ROFL")
-                raise Exception("ROFL submission failed")
+
+            # Retry loop for FuturePriceTimestamp errors
+            # Note: No return after loop - all paths return within the loop body
+            for attempt in range(FUTURE_PRICE_MAX_RETRIES):
+                try:
+                    success = await self.rofl_util.submit_tx(tx_data)
+                    if success:
+                        logger.info("Proof submitted successfully via ROFL")
+                        return "ROFL_SUBMITTED"
+                    else:
+                        logger.error("Failed to submit proof via ROFL (no success)")
+                        return None
+                except Exception as e:
+                    error_msg = str(e)
+                    if DUPLICATE_PAYMENT_ERROR_B64 in error_msg:
+                        # Payment already processed - treat as success
+                        logger.info(
+                            "DuplicatePayment error - payment was already processed, "
+                            "marking as complete"
+                        )
+                        return "ALREADY_PROCESSED"
+                    elif FUTURE_PRICE_TIMESTAMP_ERROR_B64 in error_msg:
+                        remaining = FUTURE_PRICE_MAX_RETRIES - attempt - 1
+                        if remaining > 0:
+                            logger.warning(
+                                f"FuturePriceTimestamp error (oracle ahead of block), "
+                                f"retrying in {FUTURE_PRICE_RETRY_DELAY}s... "
+                                f"({remaining} retries left)"
+                            )
+                            await asyncio.sleep(FUTURE_PRICE_RETRY_DELAY)
+                            continue
+                        else:
+                            logger.error(
+                                f"FuturePriceTimestamp error persisted after "
+                                f"{FUTURE_PRICE_MAX_RETRIES} attempts, giving up: {error_msg}"
+                            )
+                            return None
+                    else:
+                        # Non-retryable error
+                        logger.error(f"ROFL submission failed with error: {error_msg}")
+                        return None
         else:
             # Local mode
             tx_hash = contract.functions.processPayment(receipt_proof_struct).transact(

@@ -140,6 +140,11 @@ class RoflUtility:
             case {"ok": _}:
                 logger.info("Transaction submitted successfully to ROFL")
                 return True
+            case {"fail": fail_info}:
+                # EVM revert or execution failure
+                error_msg = fail_info.get("message", str(fail_info))
+                logger.error(f"ROFL transaction failed: {error_msg}")
+                raise Exception(f"ROFL transaction failed: {error_msg}")
             case {"error": error_msg}:
                 logger.error(f"ROFL transaction failed: {error_msg}")
                 raise Exception(f"ROFL transaction failed: {error_msg}")

@@ -28,7 +28,7 @@ class EventProcessor:
 
     MAX_PROCESSED_HASHES: int = 10_000
     MAX_PENDING_PAYMENTS: int = 10_000
-    MAX_STORED_HASHES: int = 10_000  # Prevent memory leak
+    MAX_STORED_HASHES: int = 10_000
 
     def __init__(
         self,
@@ -191,45 +191,84 @@ class EventProcessor:
 
             self.processed_tx_hashes[tx_hash] = None
 
-    async def process_matched_payment(self, payment_event: PaymentEvent) -> None:
+    def _remove_from_pending(self, payment_event: PaymentEvent) -> bool:
+        """Remove a payment from pending structures. Returns True if found and removed."""
+        block_payments = self.pending_payments.get(payment_event.block_number, [])
+        if payment_event not in block_payments:
+            return False
+        block_payments.remove(payment_event)
+        if not block_payments:
+            del self.pending_payments[payment_event.block_number]
+        with contextlib.suppress(ValueError):
+            self.pending_payments_order.remove(payment_event)
+        return True
+
+    def _add_to_pending(self, payment_event: PaymentEvent) -> None:
+        """Add a payment back to pending structures."""
+        if payment_event.block_number not in self.pending_payments:
+            self.pending_payments[payment_event.block_number] = []
+        if payment_event not in self.pending_payments[payment_event.block_number]:
+            self.pending_payments[payment_event.block_number].append(payment_event)
+        if payment_event not in self.pending_payments_order:
+            self.pending_payments_order.append(payment_event)
+
+    async def process_matched_payment(self, payment_event: PaymentEvent) -> bool:
         """
         Generate and submit a proof for a PaymentInitiated event.
 
+        Uses optimistic removal: removes from pending BEFORE async submission
+        to prevent duplicate processing by concurrent tasks (HashStored handler
+        and retry task). Re-adds on failure.
+
         Args:
             payment_event: The payment event to process
+
+        Returns:
+            True if processing was attempted, False if skipped (already in progress)
         """
-        try:
-            if not self.proof_manager or not self.config:
-                logger.warning(
-                    "ProofManager or config not initialized, skipping proof generation"
-                )
-                return
-
-            paymaster_address = self.config.target_chain.paymaster_address
-            logger.info(
-                f"Processing proof for PaymentInitiated to CrossChainPaymaster {paymaster_address}"
+        if not self.proof_manager or not self.config:
+            logger.warning(
+                "ProofManager or config not initialized, skipping proof generation"
             )
+            return False
 
+        # Optimistic removal BEFORE any await - atomic in asyncio
+        # This prevents race between HashStored handler and retry task
+        if not self._remove_from_pending(payment_event):
+            # Already removed by another task - skip to avoid duplicate submission
+            logger.debug(f"Payment {payment_event.tx_hash[:10]}... already being processed")
+            return False
+
+        paymaster_address = self.config.target_chain.paymaster_address
+        logger.info(
+            f"Processing proof for PaymentInitiated to CrossChainPaymaster {paymaster_address}"
+        )
+
+        try:
             # Generate and submit proof
             tx_hash = await self.proof_manager.process_payment_event(
                 payment_event, paymaster_address
             )
 
+            if tx_hash is None:
+                logger.warning(
+                    f"Proof submission failed for tx {payment_event.tx_hash}, "
+                    "will retry on next cycle"
+                )
+                self._add_to_pending(payment_event)
+                return True
+
             logger.info(f"Proof submitted successfully: {tx_hash}")
-            # Remove from pending structures
-            block_payments = self.pending_payments.get(payment_event.block_number, [])
-            if payment_event in block_payments:
-                block_payments.remove(payment_event)
-                if not block_payments:
-                    del self.pending_payments[payment_event.block_number]
-            with contextlib.suppress(ValueError):
-                self.pending_payments_order.remove(payment_event)
+            return True
 
         except Exception as e:
             logger.error(
                 f"Failed to process proof for PaymentInitiated: {e}",
                 exc_info=True,
             )
+            # Re-add to pending for retry
+            self._add_to_pending(payment_event)
+            return True
 
     def get_stats(self) -> dict:
         """
@@ -243,3 +282,29 @@ class EventProcessor:
             "pending_payments": len(self.pending_payments_order),
             "stored_hashes": len(self.stored_hashes),
         }
+
+    async def retry_pending_payments(self) -> int:
+        """
+        Retry pending payments that have hashes already stored.
+
+        This handles the case where proof submission failed but the hash
+        was already stored, so the HashStored event won't fire again.
+
+        Returns:
+            Number of payments retried
+        """
+        if not self.proof_manager or not self.config:
+            return 0
+
+        retried = 0
+        for block_number, payments in list(self.pending_payments.items()):
+            if block_number in self.stored_hashes:
+                for payment in list(payments):
+                    logger.info(
+                        f"Retrying pending payment for block {block_number}, "
+                        f"tx {payment.tx_hash}"
+                    )
+                    if await self.process_matched_payment(payment):
+                        retried += 1
+
+        return retried

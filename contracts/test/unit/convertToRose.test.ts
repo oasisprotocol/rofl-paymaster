@@ -305,6 +305,79 @@ describe("CrossChainPaymaster - _convertToRose", function () {
     });
   });
 
+  describe("Future Price Timestamp Detection", function () {
+    let paymaster: any;
+    let mockToken: any;
+    let tokenUsdFeed: any;
+    let roseUsdFeed: any;
+
+    beforeEach(async function () {
+      ({ paymaster, mockToken, tokenUsdFeed, roseUsdFeed } = await loadFixture(deploySimpleTestFixture));
+    });
+
+    it("should revert when token feed has future timestamp", async function () {
+      const adjustedAmount = parseUnits("100", 6);
+
+      // Set token price feed timestamp to future (current + 100 seconds)
+      const futureTimestamp = (await time.latest()) + 100;
+      await tokenUsdFeed.setLatestTimestamp(futureTimestamp);
+
+      await expect(
+        paymaster.exposed_convertToRose(await mockToken.getAddress(), adjustedAmount)
+      ).to.be.revertedWithCustomError(paymaster, "FuturePriceTimestamp");
+    });
+
+    it("should revert when ROSE feed has future timestamp", async function () {
+      const adjustedAmount = parseUnits("100", 6);
+      const tokenPrice = parseUnits("1", 8);
+
+      // Token feed is valid
+      await tokenUsdFeed.updateAnswer(tokenPrice);
+
+      // Set ROSE price feed timestamp to future
+      const futureTimestamp = (await time.latest()) + 100;
+      await roseUsdFeed.setLatestTimestamp(futureTimestamp);
+
+      await expect(
+        paymaster.exposed_convertToRose(await mockToken.getAddress(), adjustedAmount)
+      ).to.be.revertedWithCustomError(paymaster, "FuturePriceTimestamp");
+    });
+
+    it("should revert with correct error args for future token timestamp", async function () {
+      const adjustedAmount = parseUnits("100", 6);
+
+      const futureTimestamp = (await time.latest()) + 500;
+      await tokenUsdFeed.setLatestTimestamp(futureTimestamp);
+
+      await expect(
+        paymaster.exposed_convertToRose(await mockToken.getAddress(), adjustedAmount)
+      )
+        .to.be.revertedWithCustomError(paymaster, "FuturePriceTimestamp")
+        .withArgs(futureTimestamp, await time.latest());
+    });
+
+    it("should accept price when timestamp equals block.timestamp", async function () {
+      const adjustedAmount = parseUnits("100", 6);
+      const tokenPrice = parseUnits("1", 8);
+      const rosePrice = parseUnits("5", 8);
+
+      await tokenUsdFeed.updateAnswer(tokenPrice);
+      await roseUsdFeed.updateAnswer(rosePrice);
+
+      // Set timestamp to exactly current block timestamp (edge case - should pass)
+      const currentTimestamp = await time.latest();
+      await tokenUsdFeed.setLatestTimestamp(currentTimestamp);
+      await roseUsdFeed.setLatestTimestamp(currentTimestamp);
+
+      // Should NOT revert - timestamp == block.timestamp is valid
+      const result = await paymaster.exposed_convertToRose(
+        await mockToken.getAddress(),
+        adjustedAmount
+      );
+      expect(result).to.be.gt(0n);
+    });
+  });
+
   describe("No Price Feed Errors", function () {
     let paymaster: any;
 
