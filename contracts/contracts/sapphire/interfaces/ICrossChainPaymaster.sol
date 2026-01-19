@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity ^0.8.24;
 
 import { ReceiptProof } from "../../hashi/prover/HashiProverStructs.sol";
 import { SapphireTypes } from "../libraries/SapphireTypes.sol";
