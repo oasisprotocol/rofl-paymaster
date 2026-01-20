@@ -410,20 +410,16 @@ contract CrossChainPaymaster is
         uint8 tDec = tokenUsd.decimals();
         uint8 rDec = roseFeed.decimals();
 
-        // Normalize ROSE price to 18 decimals
-        uint256 normalizedRosePrice;
-        if (rDec < NORMALIZED_DECIMALS) {
-            normalizedRosePrice = uint256(rPrice) * (10 ** (NORMALIZED_DECIMALS - rDec));
-        } else if (rDec > NORMALIZED_DECIMALS) {
-            normalizedRosePrice = uint256(rPrice) / (10 ** (rDec - NORMALIZED_DECIMALS));
-        } else {
-            normalizedRosePrice = uint256(rPrice);
-        }
+        // Convert token amount to USD value (normalized to 18 decimals)
+        // Note: Assumes tDec <= 18 
+        uint256 usdValue = Math.mulDiv(
+            tokenAmount,
+            uint256(tPrice) * (10 ** (NORMALIZED_DECIMALS - tDec)),
+            10 ** tokenDec
+        );
 
-        // roseAmount = tokenAmount * (tokenUsd / roseUsd) adjusted to 18 decimals
-        uint256 num = Math.mulDiv(tokenAmount, uint256(tPrice), 10 ** tokenDec);
-        num = Math.mulDiv(num, 10 ** NORMALIZED_DECIMALS, 10 ** tDec);
-        roseAmount = Math.mulDiv(num, 1e18, normalizedRosePrice);
+        // Convert USD value to ROSE amount (result in 18 decimals)
+        roseAmount = Math.mulDiv(usdValue, 10 ** rDec, uint256(rPrice));
     }
 
     /// @notice Accepts ROSE funding

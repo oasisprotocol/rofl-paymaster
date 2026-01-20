@@ -1,16 +1,12 @@
 # NOTE: This name appears in GitHub's Checks API and in workflow's status badge.
 name: ci-test
 
-# Trigger the workflow when:
 on:
-  # A push occurs to one of the matched branches.
   push:
     branches:
       - main
       - master
       - stable/*
-  # Or when a pull request event occurs for a pull request against one of the
-  # matched branches.
   pull_request:
     branches:
       - main
@@ -26,6 +22,38 @@ env:
   CMAKE_POLICY_VERSION_MINIMUM: 3.5
 
 jobs:
+  test-contracts:
+    name: test-contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            contracts/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('contracts/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        working-directory: ./contracts
+        run: bun install --frozen-lockfile
+
+      - name: Compile contracts
+        working-directory: ./contracts
+        run: bun hardhat compile
+
+      - name: Run tests
+        working-directory: ./contracts
+        run: bun hardhat test
+
   test-paymaster-relayer:
     name: test-paymaster-relayer
     runs-on: ubuntu-latest
@@ -38,10 +66,11 @@ jobs:
         with:
           python-version: '3.12'
           enable-cache: true
+          cache-dependency-glob: "paymaster-relayer/uv.lock"
 
       - name: Install dependencies
         working-directory: ./paymaster-relayer
-        run: uv sync --dev
+        run: uv sync --dev --frozen
 
       - name: Run tests
         working-directory: ./paymaster-relayer
