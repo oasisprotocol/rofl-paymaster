@@ -9,6 +9,7 @@ resources:
     kind: disk-persistent
     size: 5000
 artifacts:
+  builder: ghcr.io/oasisprotocol/rofl-container-builder:0.0.1@sha256:913ef97ab07dde31f08ce873f825bf3d4f32ad4102ff5797d7c3050c121c4dce
   firmware: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/ovmf.tdx.fd#db47100a7d6a0c1f6983be224137c3f8d7cb09b63bb1c7a5ee7829d8e994a42f
   kernel: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/stage1.bin#e5d4d654ca1fa2c388bf64b23fc6e67815893fc7cb8b7cfee253d87963f54973
   stage2: https://github.com/oasisprotocol/oasis-boot/releases/download/v0.6.2/stage2-podman.tar.bz2#b2ea2a0ca769b6b2d64e3f0c577ee9c08f0bb81a6e33ed5b15b2a7e50ef9a09f
@@ -32,25 +33,47 @@ deployments:
           min_tcb_evaluation_data_number: 18
           tdx: {}
       enclaves:
-        - id: p/pr1QTUx7XBCjmrpP3aNH8k8KZ0lP1oSusGyeJgQJgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-        - id: HcsZO3k6yVzaeepD5bh/CPjoRtKDEAs+uareXsqyms4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: Mo2KdFrHy9FJHPkhibUoeAq0GQlwxgzVBf3loFShoyIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: trwHB2BHsg//rnkSWx/HR/G4pD633XLhdo0WxcqQINQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
       endorsements:
         - any: {}
       fees: endorsing_node
       max_expiration: 3
     secrets:
       - name: PAYMASTER_PROXY_ADDRESS
-        value: pGJwa1ggqcQ+Wdb2aXDNbY1ZtocH7iMJFiaWz1CeW98qWaf0+glkbmFtZVgnE2SRBathYCBvmvtTamYaRUV1/ofuj1HZWaMUM1rMaFF8EXFG3fuQZW5vbmNlT+iPziNkKg9hlWxpIL5KiGV2YWx1ZVg6c+vkqgCvN80gFYYniO9aImGUGH50bPEa5/Ap7ZjvYJ7o36IIyzKEAE4R8x29gFQB88FI++ZUiB8Fsw==
+        value: pGJwa1ggi6irJ0wXZpfpIKR3wvaPAnaADC/8HY9qo0a8mGaEbRVkbmFtZVgnRgCYyAB6Dn8SqwsbNL6rp48+IOSpzqEU5kAeUf9Tj6BkXYUKJlN6ZW5vbmNlT19YueUZ6FsAMwhUvSZ/VWV2YWx1ZVg6sS4sCI/qf1qK3lHPR7WOXpo0L83ptE/YlTUbY6DSDZ28lUX6ZJ2cSHRZNAAIjaun/+srGyi0Zpp+PA==
       - name: PAYMASTER_VAULT_ADDRESS
         value: pGJwa1gg7E1qg0h8RzFuil3s62UZD0T4cMaLsoPouCOfaRDynENkbmFtZVgnkjied9UHLB6a8jqOTI/6NNJaegUgwFbEHtXzx2g/hiAXtGWMIbcJZW5vbmNlT1Zr/sRJaIVSNoYoBjewMGV2YWx1ZVg6QHJTZLI3ZW83gIJco3PGaDGoIeA3Ny+6fRvUMTfdV/ok4imhx7sKzQSbiPYJpoS6FNtWbhdI2ljMKA==
       - name: ROFL_ADAPTER_ADDRESS
-        value: pGJwa1gg7lKYMr5wJ1m0RjDJKfca7IYl1vO4bE63uOvIAd6LQHFkbmFtZVgkF6KpE3L2Gc0fEYz+ZAM/LS/nF2xtqx5d3KCv3JJUPZ4qd/7YZW5vbmNlT/F9+fj4BuTUeDih2mi/TWV2YWx1ZVg69d0QOVEpRqIbSxJRRCVb8nveyDiO0Wwxn2p71TQ0kbObZWulb+iSOPQPhvB7jsRAc7wsuWYAZ8lIyg==
+        value: pGJwa1ggKGCqaAqNsHCmX8Bmk/hQcI3FZ+axgHfFu6gi2t8VYndkbmFtZVgktV8plZlxhqA/vpXsppi8/mbJhA8qqGjhK8MU/LJo4vyNTox+ZW5vbmNlTxINDpVhyuF+f7EM8spWBmV2YWx1ZVg6fGULnJcFt8TAVTPXKFKskIMp9M81FCYutiGeN4W0tAhqzyPdTLDktyN/L3wfRyaDCNkerr41oVhUjQ==
       - name: SOURCE_RPC_URL
         value: pGJwa1ggt6Iwtcl5y+qPtJXoWRxHusj+WF5fHhwWyJpsa/qlGDxkbmFtZVgeCJL7+cMa7uaEhYFcpconGmdTCWxQETRbiaFtKEkGZW5vbmNlTwABh7BD9wLknTVj5n0WwWV2YWx1ZVhW8aNatiaB5j6FFjLs95fPmmD4q61adZW5SXeQo0cpY94KvWPaPMvTPubGvxc5KmAkr1X2XgTAmIVh/0QAqBxW926aTjEqA5jOxEMSdGcosCXrCEC4Vw8=
       - name: TARGET_RPC_URL
-        value: pGJwa1ggmfEjSv7G3AuZaalGBk1fYdTLhI7XRgFeFZboWz48JT5kbmFtZVgeEaeKSrQ89JY8i28aqGz51kIbKC7Qw4poko/xH/GeZW5vbmNlT4RNs+aAPjIMSHkhP1EqvmV2YWx1ZVgpiMp7G7AP+lQtpu70JCBt3Y/B+ciscdKk82insPz82hkuMCQwGK7SfYg=
+        value: pGJwa1ggL/Z6HCpWswEZ7+Xp2h3KmSC9AAYvh8feFklsPcwieh5kbmFtZVgehN2bLwR47SudkfkTE7f2Fpc7X9S3YM1H9JPxu3FoZW5vbmNlT/JDtRI3ZGBSiIHTas5QwmV2YWx1ZVgpBaVQiY4FJvXvsbS4OdRrvRXr0FbEGWm1330LtSmxBIZFyG93/CCPqzA=
+      - name: ARB_SOURCE_RPC_URL
+        value: pGJwa1ggdQ3MU3/g15D1vPmFe5hu85lw+C6REXXi2CqJ5hyGARZkbmFtZVgidAMrX4+yJHsoj6dVyHuzT8CaCJJ8VZ6vIz2mM1nM0hjTVmVub25jZU8TGAtw9eN+dPEXU0pOUXRldmFsdWVYSrUxyEFtJKZi+/42uCc95fkmRUQCvb3JGkMWfgncb6JzuTp9+8coA/6pQeS1yOce0vJWG2/LOCqy2P2f7BoW8ZcNM7mNBU4FffrJ
+      - name: ARB_VAULT_ADDRESS
+        value: pGJwa1ggBfDr0Xtp5I9pY9ORZJNt7yfAquK8Vi9aNX7iOEebsFFkbmFtZVgh/hJpv/ksV69B/LlrzAYSyDRcSbuPJT6I/nMWJv1rzPF5ZW5vbmNlTxtY+CZJWjJap4JibAk2QGV2YWx1ZVg6Yf7op7Dgi/4lKxeWIjfeRPJXtN4VqgXUq2A6TM8tKooDDW7xVh03zqXL90F+dZCMuo7IJ13oRe1xsA==
+      - name: BASE_SOURCE_RPC_URL
+        value: pGJwa1ggWFEWIpzNF4uGp8U9cSJ/Fvkb9T8x11uOUVwAdaELhipkbmFtZVgj/t2LrUq7+cNXBWc6PX9GvYz4EyoTHKrFvikqc4C4oRx8mv9lbm9uY2VPkFn6NsB5Y0ImhcaIFiuPZXZhbHVlWEuD++G9Qs0zWOSXjTxZBwFnzX8OLEpx5cVvOYVUWr2Tw9tVN+dNdWKHlHV/2H4wdahD9bg2eBjP8fcELe6WiMh3Pz+YkyW+yfoSUes=
+      - name: BASE_VAULT_ADDRESS
+        value: pGJwa1gghLp7kZt7v2ib+38g/i+wWnaCrEkVrtiRWJVpA+EpYSBkbmFtZVgivNBnslM/39bdXOQm5tc0TToNziol5qRfRLFAiKgFdr/UHmVub25jZU8+IxSQBepDeHgvBo27jEVldmFsdWVYOvT9Xu9CNgoQk/w9mhCwhqq9x70sAuHbJjT7ncYHPpALZWiCrrVwrdK7Dn0npLpPQn5gO52QJIhzZ0I=
+      - name: ETH_SOURCE_RPC_URL
+        value: pGJwa1ggEYicoSZAEI9zpDoUw0rp+VEZLpuR53OPjmA8xOo0eQBkbmFtZVgidy+mXnOQgiS0VTSKFHMiPtgU1CJLiaKGa2ct5O5tEoHWcmVub25jZU9/r3/9wwMR9nMQRw/2iOtldmFsdWVYSiMZ2OpwTiJpqkbcRDdH5WMLRXpkpPKNJPVKZXa4JUsLR2vrytusWv/2BAiycQnIbVJzaDjkLovj4qQTRPBPoIPmtljPYajlwzWc
+      - name: ETH_VAULT_ADDRESS
+        value: pGJwa1ggniYku+M6LFUgkPhQJy7tDFs98+DxinkE5OM2vW06T09kbmFtZVghvcY6oa1e/zfoKudY1yaKBxFFDSzE3iNlNRW7z64kJpILZW5vbmNlT/bytDaDCfICMG/BhwQTt2V2YWx1ZVg6vt9CCsxTqJgmXhZ4Nh+sOZ3/st2AGF+JNHYBmK7nzsdCBfSfHBZKAPp9pQvR8U+BrqtjxkXIyVc68w==
+      - name: LOOKBACK_BLOCKS
+        value: pGJwa1ggp7Ikx6uFTa/W+KexCgjpqLhBpEJODlLOWW5byPOFcS1kbmFtZVgfHa1HNmLxxtsM/1tj6daWJX2K8Rz1P5/BCA7DigUCzGVub25jZU9rieXenH3hmwiRKvZul3dldmFsdWVTCgbLuv53EN4ptkJQFrvXEI6YvA==
+      - name: MAX_BLOCK_RANGE
+        value: pGJwa1ggghuvzOQeSE6fjnztC7xPy+cjHxXzchRMnbwvpxVjFCpkbmFtZVgfD0bWPNf5ZlfoHbaM88XEWhAGXguLJc90Cb5t+xwO3GVub25jZU/RisXWYcS4JomfGQiWMHJldmFsdWVT1XWr1oxI0TRVaSN/zRSucBDh3w==
+      - name: PROCESS_BATCH_SIZE
+        value: pGJwa1ggYgsCqliGIG15vQcyaQJgcayhvii9ZCOvcLwOp1cI+2JkbmFtZVgio/SBIARSpvQEy9ivWAeToXaeOe8a5b47OVnuZhaLSuCuL2Vub25jZU9YtZNdfKJDRgsSN3qjReJldmFsdWVT0y5pOslteg824KkAuWMfBrLAdw==
+      - name: RETRY_COUNT
+        value: pGJwa1ggPd1uzMfLbm9uMgAR5oMeLed7lvr3bCBE3/OCRuzOGjdkbmFtZVgb4K5X3BXuV5XULIDhKQmTZpGOTS3gpY2zcQKqZW5vbmNlTzuaG7OFugRgzx/cO0jAyGV2YWx1ZVFZkm0MLiaDJgSgOJBcAHcVGg==
     machines:
       default:
         provider: oasis1qzc8pldvm8vm3duvdrj63wgvkw34y9ucfcxzetqr
         offer: medium
-        id: 000000000000006c
+        id: 000000000000007b
+tooling:
+  version: 0.18.1

@@ -1,5 +1,6 @@
 // Paymaster tasks
 import "./paymaster/deploy/deploy-paymaster-vault";
+import "./paymaster/deploy/deploy-paymaster-vault-deterministic";
 import "./paymaster/deploy/upgrade-paymaster-vault";
 import "./paymaster/deploy/deploy-cross-chain-paymaster";
 import "./paymaster/deploy/deploy-cross-chain-paymaster-direct";

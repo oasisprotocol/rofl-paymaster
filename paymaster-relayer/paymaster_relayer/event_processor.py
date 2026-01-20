@@ -34,12 +34,14 @@ class EventProcessor:
         self,
         proof_manager: ProofManager | None = None,
         config: Optional["RelayerConfig"] = None,
+        source_chain_id: int = 0,
     ) -> None:
         """Initialize the event processor.
 
         Args:
             proof_manager: ProofManager instance for generating and submitting proofs
             config: RelayerConfig instance for accessing target addresses
+            source_chain_id: Chain ID of the source chain to filter HashStored events
         """
         self.processed_tx_hashes: OrderedDict[str, None] = OrderedDict()
 
@@ -50,6 +52,7 @@ class EventProcessor:
 
         self.proof_manager = proof_manager
         self.config = config
+        self.source_chain_id = source_chain_id
 
     async def process_payment_initiated(self, event: EventData) -> PaymentEvent | None:
         """
@@ -121,6 +124,13 @@ class EventProcessor:
             self.pending_payments[block_number].append(payment_event)
             self.pending_payments_order.append(payment_event)
 
+            # Handle race: HashStored may arrive before PaymentInitiated
+            if block_number in self.stored_hashes:
+                logger.info(
+                    f"Block {block_number} hash already stored, processing payment immediately"
+                )
+                await self.process_matched_payment(payment_event)
+
             return payment_event
 
         except Exception as e:
@@ -131,14 +141,32 @@ class EventProcessor:
         """
         Process a HashStored event from the ROFLAdapter on Sapphire.
 
+        The event now includes domain (chainId), so we filter to only process
+        events for our source chain.
+
         Args:
-            event: The HashStored event data
+            event: The HashStored event data with (domain, id, hash)
 
         Returns:
-            Tuple of (block_id, block_hash) if successful, None if error
+            Tuple of (block_id, block_hash) if successful, None if skipped/error
         """
         try:
             args: Mapping[str, Any] = event.get("args", {})
+
+            # Filter by domain (chainId) - only process events for our source chain
+            domain: int = args.get("domain", 0)
+            block_id_raw: int = args.get("id", 0)
+            logger.info(
+                f"HashStored event received: domain={domain}, id={block_id_raw}, "
+                f"source_chain_id={self.source_chain_id}"
+            )
+
+            if self.source_chain_id and domain != self.source_chain_id:
+                logger.info(
+                    f"Skipping HashStored: domain {domain} != source_chain_id {self.source_chain_id}"
+                )
+                return None
+
             block_id: int = args.get("id", 0)
 
             match args.get("hash", "0x0"):
@@ -154,7 +182,7 @@ class EventProcessor:
                 self.stored_hashes.popitem(last=False)
             self.stored_hashes[block_id] = block_hash
 
-            logger.info(f"Hash stored - Block {block_id}: {block_hash[:10]}...")
+            logger.info(f"Hash stored - Chain {domain} Block {block_id}: {block_hash[:10]}...")
 
             matching_payments: list[PaymentEvent] = self.pending_payments.get(
                 block_id, []

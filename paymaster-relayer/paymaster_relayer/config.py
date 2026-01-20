@@ -157,8 +157,19 @@ class RelayerConfig:
             )
 
         # Monitoring configuration - parse optional env vars with defaults
+        polling_interval = int(os.environ.get("POLLING_INTERVAL", "12"))
+        retry_count = int(os.environ.get("RETRY_COUNT", "3"))
+        lookback_blocks = int(os.environ.get("LOOKBACK_BLOCKS", "9"))
+        process_batch_size = int(os.environ.get("PROCESS_BATCH_SIZE", "10"))
         max_block_range = int(os.environ.get("MAX_BLOCK_RANGE", "10"))
-        monitoring_config = MonitoringConfig(max_block_range=max_block_range)
+
+        monitoring_config = MonitoringConfig(
+            polling_interval=polling_interval,
+            retry_count=retry_count,
+            lookback_blocks=lookback_blocks,
+            process_batch_size=process_batch_size,
+            max_block_range=max_block_range,
+        )
 
         # Create configuration objects
         source_chain = SourceChainConfig(

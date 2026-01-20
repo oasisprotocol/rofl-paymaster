@@ -28,6 +28,16 @@ const config: HardhatUserConfig = {
       chainId: 0x5afd,
       accounts,
     },
+    "eth-mainnet": {
+      url: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts,
+      chainId: 1
+    },
+    "arbitrum-mainnet": {
+      url: `https://arb-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts,
+      chainId: 42161
+    },
     "base-mainnet": {
       url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
       accounts,
@@ -55,24 +65,30 @@ const config: HardhatUserConfig = {
     }
   },
   solidity: {
-    version: "0.8.28",
-    settings: {
-      optimizer: {
-        enabled: true,
-      },
-      viaIR: true,
-      outputSelection: {
-        "*": {
-          "*": ["storageLayout"],
+    compilers: [
+      {
+        version: "0.8.28",
+        settings: {
+          optimizer: { enabled: true },
+          viaIR: true,
+          outputSelection: { "*": { "*": ["storageLayout"] } },
         },
       },
-    },
+      {
+        version: "0.8.24",
+        settings: {
+          optimizer: { enabled: true },
+          viaIR: true,
+          outputSelection: { "*": { "*": ["storageLayout"] } },
+        },
+      },
+    ],
   },
   sourcify: {
     enabled: true
   },
   etherscan: {
-    enabled: false,
+    enabled: true,
     apiKey: process.env.ETHERSCAN_API_KEY || "",
   }
 };

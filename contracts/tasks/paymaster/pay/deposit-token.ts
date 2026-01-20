@@ -1,5 +1,6 @@
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { waitForNonce } from "../../helpers/nonce";
 
 // Deposit ERC20 into PaymasterVault and emit Hashi-proofable PaymentInitiated
 // Usage:
@@ -91,6 +92,7 @@ task("pay:deposit", "Deposit ERC20 into PaymasterVault and emit PaymentInitiated
       const atx = await token.approve(vaultAddr, amount*5n);
       console.log("  approve tx:", atx.hash);
       await atx.wait();
+      await waitForNonce(ethers.provider, signer.address, atx.nonce + 1);
     }
 
     // Submit deposit

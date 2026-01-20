@@ -1,5 +1,6 @@
 import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { waitForNonce } from "../../helpers/nonce";
 
 function toBool(v?: string | boolean): boolean {
   if (typeof v === "boolean") return v;
@@ -38,7 +39,8 @@ task("configure:paymaster-vault", "Post-deploy configuration for PaymasterVault"
       ? toBool(args.breakerenabled)
       : (process.env.PAYMASTER_VAULT_BREAKER_ENABLED !== undefined ? toBool(process.env.PAYMASTER_VAULT_BREAKER_ENABLED) : true);
 
-    const vault = await ethers.getContractAt("PaymasterVault", proxy);
+    const [signer] = await ethers.getSigners();
+    const vault = await ethers.getContractAt("PaymasterVault", proxy, signer);
 
     console.log("Network:", hre.network.name);
     console.log("Proxy:", proxy);
@@ -66,13 +68,21 @@ task("configure:paymaster-vault", "Post-deploy configuration for PaymasterVault"
 
       // 2) Circuit breaker settings for token
       if (dailyStr) {
+        await waitForNonce(ethers.provider, await signer.getAddress(), tx.nonce + 1);
         const daily = ethers.parseUnits(dailyStr, decimals);
         console.log("Setting per-token daily limit:", daily.toString());
         const ltx = await vault.setTokenDailyLimit(token, daily);
         console.log("tx:", ltx.hash);
         await ltx.wait();
+
+        if (args.breakerenabled !== undefined) {
+          await waitForNonce(ethers.provider, await signer.getAddress(), ltx.nonce + 1);
+        }
       }
       if (args.breakerenabled !== undefined) {
+        if (!dailyStr) {
+          await waitForNonce(ethers.provider, await signer.getAddress(), tx.nonce + 1);
+        }
         console.log("Setting per-token circuit breaker enabled:", breakerEnabled);
         const etx = await vault.setTokenCircuitBreakerEnabled(token, breakerEnabled);
         console.log("tx:", etx.hash);

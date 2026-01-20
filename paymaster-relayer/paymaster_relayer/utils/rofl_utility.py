@@ -1,3 +1,4 @@
+import asyncio
 import codecs
 import json
 import logging
@@ -102,9 +103,9 @@ class RoflUtility:
             logger.error(f"CBOR decode error: {decode_error}")
             return {"error": "decode_failed", "raw": response_hex}
 
-    async def submit_tx(self, tx: TxParams) -> bool:
+    async def _submit_tx_internal(self, tx: TxParams) -> bool:
         """
-        Submit a transaction via ROFL.
+        Internal method to submit a transaction via ROFL.
 
         Args:
             tx: Transaction parameters
@@ -152,3 +153,49 @@ class RoflUtility:
                 logger.warning(f"Unknown ROFL response format: {decoded_response}")
                 # If no clear error, assume success
                 return True
+
+    async def submit_tx(self, tx: TxParams, max_retries: int = 3) -> bool:
+        """
+        Submit a transaction via ROFL with retry logic for nonce contention.
+
+        Implements exponential backoff retry for nonce-related errors that occur
+        when multiple relayer services submit transactions concurrently to the
+        same ROFL-managed address.
+
+        Args:
+            tx: Transaction parameters
+            max_retries: Maximum number of retry attempts (default: 3)
+
+        Returns:
+            True if transaction was accepted, False if all retries exhausted
+
+        Raises:
+            Exception: If ROFL returns a non-nonce-related error
+        """
+        for attempt in range(max_retries):
+            try:
+                return await self._submit_tx_internal(tx)
+            except Exception as e:
+                error_msg = str(e).lower()
+
+                if "nonce" in error_msg:
+                    if attempt < max_retries - 1:
+                        # Calculate exponential backoff: 2^attempt seconds
+                        backoff_time = 2**attempt
+                        logger.warning(
+                            f"Nonce contention detected (attempt {attempt + 1}/{max_retries}): {e}. "
+                            f"Retrying in {backoff_time}s..."
+                        )
+                        await asyncio.sleep(backoff_time)
+                        continue
+                    else:
+                        logger.error(
+                            f"Nonce contention persists after {max_retries} attempts. Giving up."
+                        )
+                        return False
+                else:
+                    logger.error(f"Non-nonce error in transaction submission: {e}")
+                    raise
+
+        # Should never reach here, but safety fallback
+        return False
