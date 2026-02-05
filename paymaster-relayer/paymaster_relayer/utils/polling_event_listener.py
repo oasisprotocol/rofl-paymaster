@@ -3,24 +3,30 @@ Polling-based event listener utility for blockchain event monitoring.
 
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from web3 import Web3
 from web3.types import EventData
+
+if TYPE_CHECKING:
+    from .multi_rpc_provider import MultiRpcProvider
 
 
 class PollingEventListener:
     """
     Utility for polling blockchain events via HTTP RPC.
 
+    Uses MultiRpcProvider for automatic failover support.
     """
 
     def __init__(
         self,
-        rpc_url: str,
+        provider: MultiRpcProvider,
         contract_address: str,
         event_name: str,
         abi: list[dict[str, Any]],
@@ -31,29 +37,26 @@ class PollingEventListener:
         Initialize the polling event listener.
 
         Args:
-            rpc_url: HTTP RPC endpoint URL
+            provider: MultiRpcProvider instance for RPC failover
             contract_address: Address of the contract to monitor
             event_name: Name of the event to listen for
             abi: Contract ABI
             lookback_blocks: Number of blocks to look back on startup
             max_block_range: Max blocks per get_logs request (None = no limit)
         """
-        self.rpc_url = rpc_url
         self.contract_address = Web3.to_checksum_address(contract_address)
         self.event_name = event_name
         self.lookback_blocks = lookback_blocks
         self.max_block_range = max_block_range
+        self.abi = abi
+        self.provider = provider
 
-        # Initialize Web3 connection
-        self.w3 = Web3(Web3.HTTPProvider(rpc_url))
-
-        # Create contract instance
-        self.contract = self.w3.eth.contract(address=self.contract_address, abi=abi)
-
-        # Get the event object
-        if not hasattr(self.contract.events, event_name):
+        # Validate event exists in ABI
+        temp_contract = self.provider.get_web3().eth.contract(
+            address=self.contract_address, abi=abi
+        )
+        if not hasattr(temp_contract.events, event_name):
             raise ValueError(f"Event {event_name} not found in contract ABI")
-        self.event_obj = getattr(self.contract.events, event_name)
 
         # State tracking
         self.last_processed_block: int | None = None
@@ -62,20 +65,12 @@ class PollingEventListener:
         # Setup logging
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def _get_logs_chunked(self, from_block: int, to_block: int) -> list[EventData]:
-        """
-        Fetch logs in chunks to respect RPC provider block range limits.
-
-        Args:
-            from_block: Starting block number
-            to_block: Ending block number (inclusive)
-
-        Returns:
-            List of all events across the block range
-        """
+    def _get_logs_chunked_with_w3(
+        self, w3: Web3, from_block: int, to_block: int
+    ) -> list[EventData]:
+        """Fetch logs in chunks using a specific Web3 instance for consistency."""
         if self.max_block_range is None or to_block - from_block < self.max_block_range:
-            # No chunking needed
-            return list(self.event_obj.get_logs(from_block=from_block, to_block=to_block))
+            return self._get_logs_range_with_w3(w3, from_block, to_block)
 
         all_events: list[EventData] = []
         current_from = from_block
@@ -85,11 +80,46 @@ class PollingEventListener:
             self.logger.debug(
                 f"Fetching logs chunk: blocks {current_from}-{current_to}"
             )
-            events = self.event_obj.get_logs(from_block=current_from, to_block=current_to)
+            events = self._get_logs_range_with_w3(w3, current_from, current_to)
             all_events.extend(events)
             current_from = current_to + 1
 
         return all_events
+
+    def _get_logs_range_with_w3(
+        self, w3: Web3, from_block: int, to_block: int
+    ) -> list[EventData]:
+        """Get logs for a single block range using a specific Web3 instance."""
+        contract = w3.eth.contract(address=self.contract_address, abi=self.abi)
+        event_obj = getattr(contract.events, self.event_name)
+        return list(event_obj.get_logs(from_block=from_block, to_block=to_block))
+
+    def _sync_cycle(self, w3: Web3, lookback: int) -> tuple[int, list[EventData]]:
+        """Execute a complete initial sync cycle using a single Web3 instance."""
+        current_block = w3.eth.block_number
+        from_block = max(0, current_block - lookback)
+        events = self._get_logs_chunked_with_w3(w3, from_block, current_block)
+        return current_block, events
+
+    def _poll_cycle(self, w3: Web3) -> tuple[int, list[EventData]]:
+        """Execute a complete poll cycle using a single Web3 instance.
+
+        Ensures block number and logs come from the same provider,
+        preventing inconsistency if failover occurs between calls.
+        """
+        current_block = w3.eth.block_number
+
+        if self.last_processed_block and current_block <= self.last_processed_block:
+            return current_block, []
+
+        from_block = (
+            (self.last_processed_block + 1)
+            if self.last_processed_block
+            else current_block
+        )
+
+        events = self._get_logs_chunked_with_w3(w3, from_block, current_block)
+        return current_block, events
 
     async def initial_sync(self, callback: Callable[[EventData], Any]) -> None:
         """
@@ -99,16 +129,15 @@ class PollingEventListener:
             callback: Async function to call for each event found
         """
         try:
-            current_block = self.w3.eth.block_number
-            from_block = max(0, current_block - self.lookback_blocks)
-
-            self.logger.info(
-                f"Initial sync for {self.event_name} events "
-                f"from block {from_block} to {current_block}"
+            # Single failover context for consistency
+            current_block, events = await asyncio.to_thread(
+                self.provider.execute_with_failover,
+                lambda w3: self._sync_cycle(w3, self.lookback_blocks),
             )
 
-            # Get historical events (chunked if max_block_range is set)
-            events = self._get_logs_chunked(from_block, current_block)
+            self.logger.info(
+                f"Initial sync for {self.event_name} events up to block {current_block}"
+            )
 
             if events:
                 self.logger.info(
@@ -134,25 +163,21 @@ class PollingEventListener:
             callback: Async function to call for each new event
         """
         try:
-            current_block = self.w3.eth.block_number
+            # Single failover context ensures block number and
+            # logs come from the same provider (same sync state)
+            current_block, events = await asyncio.to_thread(
+                self.provider.execute_with_failover,
+                self._poll_cycle,
+            )
 
             # Skip if no new blocks
             if self.last_processed_block and current_block <= self.last_processed_block:
                 return
 
-            from_block = (
-                (self.last_processed_block + 1)
-                if self.last_processed_block
-                else current_block
-            )
-
-            # Get new events (chunked if max_block_range is set)
-            events = self._get_logs_chunked(from_block, current_block)
-
             if events:
                 self.logger.info(
                     f"Found {len(events)} new {self.event_name} events "
-                    f"in blocks {from_block}-{current_block}"
+                    f"in blocks up to {current_block}"
                 )
                 for event in events:
                     await callback(event)
@@ -217,5 +242,5 @@ class PollingEventListener:
             "last_processed_block": self.last_processed_block,
             "contract_address": self.contract_address,
             "event_name": self.event_name,
-            "rpc_url": self.rpc_url,
+            "rpc_url": self.provider.current_url_sanitized,
         }

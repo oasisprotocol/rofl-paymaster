@@ -26,6 +26,7 @@ from paymaster_relayer.proof_manager import (
     FUTURE_PRICE_TIMESTAMP_ERROR_B64,
     ProofManager,
 )
+from paymaster_relayer.utils.multi_rpc_provider import MultiRpcProvider
 
 # Valid Ethereum addresses for testing
 TEST_ADDRESS = "0x0000000000000000000000000000000000000001"
@@ -57,8 +58,15 @@ class TestFuturePriceTimestampRetry:
     @pytest.fixture
     def proof_manager(self, mock_w3_source, mock_contract_util, mock_rofl_util):
         """Create a ProofManager with mocked dependencies."""
+        # Mock MultiRpcProvider
+        mock_provider = MagicMock(spec=MultiRpcProvider)
+        mock_provider.execute_with_failover = MagicMock(
+            side_effect=lambda op: op(mock_w3_source)
+        )
+        mock_provider.get_web3.return_value = mock_w3_source
+
         return ProofManager(
-            w3_source=mock_w3_source,
+            source_provider=mock_provider,
             contract_util=mock_contract_util,
             rofl_util=mock_rofl_util,
         )
@@ -156,7 +164,9 @@ class TestFuturePriceTimestampRetry:
                     assert mock_sleep.call_count == FUTURE_PRICE_MAX_RETRIES - 1
 
                     # Should have tried max_retries times
-                    assert mock_rofl_util.submit_tx.call_count == FUTURE_PRICE_MAX_RETRIES
+                    assert (
+                        mock_rofl_util.submit_tx.call_count == FUTURE_PRICE_MAX_RETRIES
+                    )
 
                     # Should return None (failure)
                     assert result is None
@@ -174,8 +184,15 @@ class TestDuplicatePaymentHandling:
         mock_contract_util.w3.eth.gas_price = 1000000000
         mock_w3_source = MagicMock()
 
+        # Mock MultiRpcProvider
+        mock_provider = MagicMock(spec=MultiRpcProvider)
+        mock_provider.execute_with_failover = MagicMock(
+            side_effect=lambda op: op(mock_w3_source)
+        )
+        mock_provider.get_web3.return_value = mock_w3_source
+
         return ProofManager(
-            w3_source=mock_w3_source,
+            source_provider=mock_provider,
             contract_util=mock_contract_util,
             rofl_util=mock_rofl_util,
         )

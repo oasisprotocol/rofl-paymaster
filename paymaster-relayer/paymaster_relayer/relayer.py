@@ -10,12 +10,11 @@ import contextlib
 import logging
 import os
 
-from web3 import Web3
-
 from .config import RelayerConfig
 from .event_processor import EventProcessor
 from .proof_manager import ProofManager
 from .utils.contract_utility import ContractUtility
+from .utils.multi_rpc_provider import MultiRpcProvider
 from .utils.polling_event_listener import PollingEventListener
 from .utils.rofl_utility import RoflUtility
 
@@ -53,7 +52,9 @@ class ROFLRelayer:
         self._init_utilities()
 
         # Get source chain ID for filtering HashStored events
-        source_chain_id = self.w3_source.eth.chain_id
+        source_chain_id = self.source_provider.execute_with_failover(
+            lambda w3: w3.eth.chain_id
+        )
 
         self.event_processor = EventProcessor(
             proof_manager=self.proof_manager,
@@ -69,12 +70,8 @@ class ROFLRelayer:
         """
         Initialize utility classes for proof generation.
         """
-        # Initialize Web3 for source chain
-        self.w3_source = Web3(Web3.HTTPProvider(self.config.source_chain.rpc_url))
-        if not self.w3_source.is_connected():
-            raise Exception(
-                f"Failed to connect to source chain at {self.config.source_chain.rpc_url}"
-            )
+        # Initialize multi-RPC provider for source chain with failover
+        self.source_provider = MultiRpcProvider(self.config.source_chain.rpc_urls)
 
         # Initialize contract utility for target chain
         self.contract_util = ContractUtility(
@@ -85,12 +82,14 @@ class ROFLRelayer:
         self.rofl_util = None if self.config.local_mode else RoflUtility()
 
         self.proof_manager = ProofManager(
-            w3_source=self.w3_source,
+            source_provider=self.source_provider,
             contract_util=self.contract_util,
             rofl_util=self.rofl_util,
         )
 
-        source_chain_id = self.w3_source.eth.chain_id
+        source_chain_id = self.source_provider.execute_with_failover(
+            lambda w3: w3.eth.chain_id
+        )
         logger.info(
             f"Paymaster Relayer initialized ({'LOCAL' if self.config.local_mode else 'ROFL'} mode, source chain: {source_chain_id})"
         )
@@ -121,9 +120,9 @@ class ROFLRelayer:
         paymaster_vault_abi = self.contract_util.get_contract_abi("PaymasterVault")
         rofl_adapter_abi = self.contract_util.get_contract_abi("ROFLAdapter")
 
-        # Initialize PaymentInitiated event listener (source chain)
+        # Initialize PaymentInitiated event listener (source chain with multi-RPC failover)
         self.payment_listener = PollingEventListener(
-            rpc_url=self.config.source_chain.rpc_url,
+            provider=self.source_provider,
             contract_address=self.config.source_chain.paymaster_vault_address,
             event_name="PaymentInitiated",
             abi=paymaster_vault_abi,
@@ -137,7 +136,7 @@ class ROFLRelayer:
 
         # Initialize ROFLAdapter event listener (target chain - Sapphire)
         self.hash_listener = PollingEventListener(
-            rpc_url=self.config.target_chain.rpc_url,
+            provider=MultiRpcProvider([self.config.target_chain.rpc_url]),
             contract_address=self.config.target_chain.rofl_adapter_address,
             event_name="HashStored",
             abi=rofl_adapter_abi,
@@ -250,3 +249,8 @@ class ROFLRelayer:
         """Stop the relayer service."""
         self.running = False
         self.shutdown_event.set()
+
+        # Signal providers to stop retrying
+        self.source_provider.shutdown()
+        if self.hash_listener:
+            self.hash_listener.provider.shutdown()

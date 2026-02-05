@@ -10,6 +10,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from paymaster_relayer.relayer import ROFLRelayer
+from paymaster_relayer.utils.multi_rpc_provider import MultiRpcProvider
 from paymaster_relayer.utils.polling_event_listener import PollingEventListener
 
 
@@ -37,7 +38,7 @@ async def test_polling_listener_structure():
 
     # Create listener instance
     listener = PollingEventListener(
-        rpc_url="https://ethereum-sepolia.publicnode.com",
+        provider=MultiRpcProvider(["https://ethereum-sepolia.publicnode.com"]),
         contract_address="0x0000000000000000000000000000000000000000",
         event_name="PaymentInitiated",
         abi=test_abi,
@@ -61,7 +62,7 @@ async def test_relayer_with_real_contracts():
     print("=" * 60)
 
     # Set up environment with real contract addresses
-    os.environ["SOURCE_RPC_URL"] = "https://ethereum-sepolia.publicnode.com"
+    os.environ["SOURCE_RPC_URLS"] = "https://ethereum-sepolia.publicnode.com"
     os.environ["TARGET_RPC_URL"] = "https://testnet.sapphire.oasis.io"
     os.environ["PAYMASTER_VAULT_ADDRESS"] = "0x0000000000000000000000000000000000000000"
     os.environ["PAYMASTER_PROXY_ADDRESS"] = "0x0000000000000000000000000000000000000000"
