@@ -9,12 +9,35 @@ to CrossChainPaymaster on Oasis Sapphire.
 import os
 from dataclasses import dataclass, field
 
+from .utils.multi_rpc_provider import sanitize_url
+
+
+def parse_rpc_urls() -> list[str]:
+    """
+    Parse SOURCE_RPC_URLS env var into a list of RPC endpoint URLs.
+
+    Splits on commas, strips whitespace, and filters empty entries.
+
+    Returns:
+        List of non-empty, trimmed URLs
+
+    Raises:
+        ValueError: If SOURCE_RPC_URLS is missing or contains no valid URLs
+    """
+    raw = os.environ.get("SOURCE_RPC_URLS", "")
+    urls = [url.strip() for url in raw.split(",") if url.strip()]
+
+    if not urls:
+        raise ValueError("SOURCE_RPC_URLS environment variable is missing or empty")
+
+    return urls
+
 
 @dataclass(frozen=True, slots=True)
 class SourceChainConfig:
     """Configuration for the source chain (e.g., Base/Sepolia)."""
 
-    rpc_url: str
+    rpc_urls: list[str]
     paymaster_vault_address: str
 
 
@@ -37,7 +60,9 @@ class MonitoringConfig:
     retry_count: int = 3
     lookback_blocks: int = 9
     process_batch_size: int = 10  # max events to process in one batch
-    max_block_range: int = 10  # max blocks per get_logs request (Alchemy free tier limit)
+    max_block_range: int = (
+        10  # max blocks per get_logs request (Alchemy free tier limit)
+    )
 
     def __post_init__(self) -> None:
         """Validate monitoring configuration."""
@@ -69,7 +94,6 @@ class MonitoringConfig:
                 f"Lookback blocks too high (max 1000), got {self.lookback_blocks}"
             )
 
-
         # Validate batch size
         if self.process_batch_size <= 0:
             raise ValueError(
@@ -89,6 +113,7 @@ class MonitoringConfig:
             raise ValueError(
                 f"Max block range too large (max 10000), got {self.max_block_range}"
             )
+
 
 @dataclass(frozen=True, slots=True)
 class RelayerConfig:
@@ -110,13 +135,14 @@ class RelayerConfig:
         Raises:
             ValueError: If required environment variables are missing
         """
-        # Source chain configuration
-        source_rpc_url = os.environ.get("SOURCE_RPC_URL")
-        if not source_rpc_url:
+        # Source chain configuration - parse comma-delimited RPC URLs
+        try:
+            source_rpc_urls = parse_rpc_urls()
+        except ValueError:
             raise ValueError(
-                "SOURCE_RPC_URL environment variable is required. "
-                "Example: https://ethereum-sepolia.publicnode.com"
-            )
+                "SOURCE_RPC_URLS environment variable is required (comma-separated). "
+                "Example: SOURCE_RPC_URLS=https://rpc1.example.com,https://rpc2.example.com"
+            ) from None
 
         paymaster_vault_address = os.environ.get("PAYMASTER_VAULT_ADDRESS")
         if not paymaster_vault_address:
@@ -173,7 +199,7 @@ class RelayerConfig:
 
         # Create configuration objects
         source_chain = SourceChainConfig(
-            rpc_url=source_rpc_url,
+            rpc_urls=source_rpc_urls,
             paymaster_vault_address=paymaster_vault_address,
         )
 
@@ -197,11 +223,13 @@ class RelayerConfig:
         print(f"Mode: {'LOCAL' if self.local_mode else 'ROFL'}")
 
         print("\n[Source Chain]")
-        print(f"  RPC URL: {self.source_chain.rpc_url}")
+        print(f"  RPC URLs ({len(self.source_chain.rpc_urls)} configured):")
+        for i, url in enumerate(self.source_chain.rpc_urls, 1):
+            print(f"    [{i}] {sanitize_url(url)}")
         print(f"  PaymasterVault: {self.source_chain.paymaster_vault_address}")
 
         print("\n[Target Chain]")
-        print(f"  RPC URL: {self.target_chain.rpc_url}")
+        print(f"  RPC URL: {sanitize_url(self.target_chain.rpc_url)}")
         print(f"  CrossChainPaymaster: {self.target_chain.paymaster_address}")
         print(f"  ROFLAdapter: {self.target_chain.rofl_adapter_address}")
         print(

@@ -42,7 +42,7 @@ ROFL deployment in one go.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SOURCE_RPC_URL` | Yes | Source chain RPC endpoint (HTTP) |
+| `SOURCE_RPC_URLS` | Yes | Source chain RPC endpoints (comma-separated for failover) |
 | `PAYMASTER_VAULT_ADDRESS` | Yes | PaymasterVault contract address on source chain |
 | `TARGET_RPC_URL` | Yes | Sapphire RPC endpoint |
 | `PAYMASTER_PROXY_ADDRESS` | Yes | CrossChainPaymaster proxy address on Sapphire |

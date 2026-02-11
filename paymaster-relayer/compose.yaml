@@ -31,7 +31,7 @@ services:
     environment:
       <<: *common-env
       CHAIN_NAME: base
-      SOURCE_RPC_URL: ${BASE_SOURCE_RPC_URL}
+      SOURCE_RPC_URLS: ${BASE_SOURCE_RPC_URLS}
       PAYMASTER_VAULT_ADDRESS: ${BASE_VAULT_ADDRESS}
       POLLING_INTERVAL: ${BASE_POLLING_INTERVAL:-6}
 
@@ -43,7 +43,7 @@ services:
     environment:
       <<: *common-env
       CHAIN_NAME: ethereum
-      SOURCE_RPC_URL: ${ETH_SOURCE_RPC_URL}
+      SOURCE_RPC_URLS: ${ETH_SOURCE_RPC_URLS}
       PAYMASTER_VAULT_ADDRESS: ${ETH_VAULT_ADDRESS}
       POLLING_INTERVAL: ${ETH_POLLING_INTERVAL:-12}
 
@@ -55,6 +55,6 @@ services:
     environment:
       <<: *common-env
       CHAIN_NAME: arbitrum
-      SOURCE_RPC_URL: ${ARB_SOURCE_RPC_URL}
+      SOURCE_RPC_URLS: ${ARB_SOURCE_RPC_URLS}
       PAYMASTER_VAULT_ADDRESS: ${ARB_VAULT_ADDRESS}
       POLLING_INTERVAL: ${ARB_POLLING_INTERVAL:-3}

@@ -20,6 +20,7 @@ from .utils.blockchain_encoder import BlockchainEncoder
 
 if TYPE_CHECKING:
     from .utils.contract_utility import ContractUtility
+    from .utils.multi_rpc_provider import MultiRpcProvider
     from .utils.rofl_utility import ROFLUtility
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ class ProofManager:
 
     def __init__(
         self,
-        w3_source: Web3,
+        source_provider: "MultiRpcProvider",
         contract_util: "ContractUtility",
         rofl_util: "ROFLUtility | None" = None,
     ):
@@ -46,11 +47,11 @@ class ProofManager:
         Initialize the ProofManager.
 
         Args:
-            w3_source: Web3 instance for the source chain
+            source_provider: MultiRpcProvider for source chain with failover
             contract_util: Utility for contract interactions
             rofl_util: ROFL utility for transaction submission (optional)
         """
-        self.w3_source = w3_source
+        self.source_provider = source_provider
         self.contract_util = contract_util
         self.rofl_util = rofl_util
 
@@ -72,7 +73,9 @@ class ProofManager:
         Returns:
             Transaction-local index (position within transaction's logs)
         """
-        receipt = self.w3_source.eth.get_transaction_receipt(HexStr(payment_event.tx_hash))
+        receipt = self.source_provider.execute_with_failover(
+            lambda w3: w3.eth.get_transaction_receipt(HexStr(payment_event.tx_hash))
+        )
         if not receipt or "logs" not in receipt:
             logger.warning(f"No logs found in transaction {payment_event.tx_hash}")
             return 0
@@ -90,7 +93,9 @@ class ProofManager:
                 return i
 
         # If not found (shouldn't happen), default to 0
-        logger.warning("PaymentInitiated not found in transaction logs, defaulting to index 0")
+        logger.warning(
+            "PaymentInitiated not found in transaction logs, defaulting to index 0"
+        )
         return 0
 
     async def generate_proof(self, payment_event: PaymentEvent) -> list[Any]:
@@ -109,18 +114,28 @@ class ProofManager:
             ValueError: If receipt or block not found, or proof generation fails
         """
         # Calculate transaction-local log index from event content
-        log_index = self._get_transaction_local_index(payment_event)
+        log_index = await asyncio.to_thread(
+            self._get_transaction_local_index, payment_event
+        )
         logger.info(
             f"Generating proof for tx {payment_event.tx_hash}, transaction-local log index {log_index}"
         )
 
         # 1. Fetch receipt and block
-        receipt = self.w3_source.eth.get_transaction_receipt(HexStr(payment_event.tx_hash))
+        receipt = await asyncio.to_thread(
+            self.source_provider.execute_with_failover,
+            lambda w3: w3.eth.get_transaction_receipt(HexStr(payment_event.tx_hash)),
+        )
         if not receipt:
-            raise ValueError(f"Transaction receipt not found for {payment_event.tx_hash}")
+            raise ValueError(
+                f"Transaction receipt not found for {payment_event.tx_hash}"
+            )
 
         block_number = receipt["blockNumber"]
-        block = self.w3_source.eth.get_block(block_number, full_transactions=True)
+        block = await asyncio.to_thread(
+            self.source_provider.execute_with_failover,
+            lambda w3: w3.eth.get_block(block_number, full_transactions=True),
+        )
         if not block:
             raise ValueError(f"Block not found for block number {block_number}")
 
@@ -129,7 +144,7 @@ class ProofManager:
         )
 
         # 2. Get all receipts in block
-        receipts = self._get_block_receipts(block_number)
+        receipts = await asyncio.to_thread(self._get_block_receipts, block_number)
 
         logger.info(f"Fetched {len(receipts)} receipts from block")
 
@@ -166,7 +181,10 @@ class ProofManager:
         # 6. Encode block header
         encoded_block_header = BlockchainEncoder.encode_block_header(block)
 
-        chain_id = int(self.w3_source.eth.chain_id)
+        chain_id = await asyncio.to_thread(
+            self.source_provider.execute_with_failover,
+            lambda w3: int(w3.eth.chain_id),
+        )
 
         # 7. Create proof structure for Hashi
         proof = [
@@ -185,7 +203,9 @@ class ProofManager:
         )
         return proof
 
-    async def submit_proof(self, proof: list[Any], paymaster_address: str) -> str | None:
+    async def submit_proof(
+        self, proof: list[Any], paymaster_address: str
+    ) -> str | None:
         """
         Submit proof to CrossChainPaymaster contract.
 
@@ -314,7 +334,9 @@ class ProofManager:
             ValueError: If block receipts cannot be fetched
         """
         try:
-            receipts = self.w3_source.eth.get_block_receipts(block_number)
+            receipts = self.source_provider.execute_with_failover(
+                lambda w3: w3.eth.get_block_receipts(block_number)
+            )
         except Exception as e:
             logger.error(f"Failed to fetch receipts for block {block_number}: {e}")
             raise ValueError(

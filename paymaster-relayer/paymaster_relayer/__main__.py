@@ -19,7 +19,9 @@ async def main():
     )
     args = parser.parse_args()
 
-    logger.info(f"=== Paymaster Relayer Starting {'(LOCAL MODE)' if args.local else ''} ===")
+    logger.info(
+        f"=== Paymaster Relayer Starting {'(LOCAL MODE)' if args.local else ''} ==="
+    )
 
     relayer = None
 
@@ -29,11 +31,19 @@ async def main():
     except ValueError as e:
         logger.error(f"Configuration error: {e}")
         logger.error("Required environment variables:")
-        logger.error("  - SOURCE_RPC_URL: Source chain RPC endpoint (e.g., Ethereum)")
+        logger.error(
+            "  - SOURCE_RPC_URLS: Source chain RPC endpoints (comma-separated)"
+        )
         logger.error("  - TARGET_RPC_URL: Target chain RPC endpoint (e.g., Sapphire)")
-        logger.error("  - PAYMASTER_VAULT_ADDRESS: PaymasterVault contract address (source)")
-        logger.error("  - PAYMASTER_PROXY_ADDRESS: CrossChainPaymaster contract address (target)")
-        logger.error("  - ROFL_ADAPTER_ADDRESS: ROFLAdapter contract address (target, HashStored)")
+        logger.error(
+            "  - PAYMASTER_VAULT_ADDRESS: PaymasterVault contract address (source)"
+        )
+        logger.error(
+            "  - PAYMASTER_PROXY_ADDRESS: CrossChainPaymaster contract address (target)"
+        )
+        logger.error(
+            "  - ROFL_ADAPTER_ADDRESS: ROFLAdapter contract address (target, HashStored)"
+        )
         if args.local:
             logger.error("  - PRIVATE_KEY: Private key for signing transactions")
         sys.exit(1)

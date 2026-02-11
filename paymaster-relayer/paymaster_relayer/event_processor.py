@@ -182,7 +182,9 @@ class EventProcessor:
                 self.stored_hashes.popitem(last=False)
             self.stored_hashes[block_id] = block_hash
 
-            logger.info(f"Hash stored - Chain {domain} Block {block_id}: {block_hash[:10]}...")
+            logger.info(
+                f"Hash stored - Chain {domain} Block {block_id}: {block_hash[:10]}..."
+            )
 
             matching_payments: list[PaymentEvent] = self.pending_payments.get(
                 block_id, []
@@ -264,7 +266,9 @@ class EventProcessor:
         # This prevents race between HashStored handler and retry task
         if not self._remove_from_pending(payment_event):
             # Already removed by another task - skip to avoid duplicate submission
-            logger.debug(f"Payment {payment_event.tx_hash[:10]}... already being processed")
+            logger.debug(
+                f"Payment {payment_event.tx_hash[:10]}... already being processed"
+            )
             return False
 
         paymaster_address = self.config.target_chain.paymaster_address

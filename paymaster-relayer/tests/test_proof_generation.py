@@ -10,7 +10,9 @@ import json
 import os
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import pytest
 from web3 import Web3
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -18,6 +20,37 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from paymaster_relayer.models import PaymentEvent
 from paymaster_relayer.proof_manager import ProofManager
 from paymaster_relayer.utils.contract_utility import ContractUtility
+from paymaster_relayer.utils.multi_rpc_provider import MultiRpcProvider
+
+
+@pytest.fixture(autouse=True)
+def mock_threading_event_for_tests():
+    """
+    Mock threading.Event to prevent infinite retry in tests.
+
+    This fixture ensures that MultiRpcProvider instances created in tests
+    will fail fast instead of retrying infinitely when RPC connections fail.
+    """
+    with patch(
+        "paymaster_relayer.utils.multi_rpc_provider.threading.Event"
+    ) as mock_event_class:
+        # Each test gets its own mock event instance with fresh counter
+        def create_mock_event():
+            mock_event = MagicMock()
+            # Allow up to 10 wait calls per event instance
+            wait_count = [0]
+
+            def limit_retries(timeout=None):
+                wait_count[0] += 1
+                return wait_count[0] > 10  # Signal shutdown after 10 attempts
+
+            mock_event.is_set.return_value = False
+            mock_event.wait.side_effect = limit_retries
+            return mock_event
+
+        # Return a new mock event for each call
+        mock_event_class.side_effect = create_mock_event
+        yield mock_event_class
 
 
 async def test_proof_matches_typescript():
@@ -30,7 +63,9 @@ async def test_proof_matches_typescript():
     proof_path = Path(__file__).parent.parent.parent / "pay" / "proof.json"
     if not proof_path.exists():
         print(f"❌ TypeScript proof not found at {proof_path}")
-        print("   Please run 'hardhat pay:generate-proof' in contracts to create proof.json")
+        print(
+            "   Please run 'hardhat pay:generate-proof' in contracts to create proof.json"
+        )
         return False
 
     with open(proof_path) as f:
@@ -49,7 +84,7 @@ async def test_proof_matches_typescript():
 
     # Initialize Web3 connection to source chain
     source_rpc = os.environ.get(
-        "SOURCE_RPC_URL", "https://ethereum-sepolia.publicnode.com"
+        "SOURCE_RPC_URLS", "https://ethereum-sepolia.publicnode.com"
     )
     print(f"\n🌐 Connecting to source chain: {source_rpc}")
 
@@ -67,7 +102,9 @@ async def test_proof_matches_typescript():
 
     # Find the PaymentInitiated event in the logs
     # PaymentInitiated event signature
-    payment_topic = Web3.keccak(text="PaymentInitiated(address,address,address,uint256,bytes32)")
+    payment_topic = Web3.keccak(
+        text="PaymentInitiated(address,address,address,uint256,bytes32)"
+    )
     payer = None
     event_block_number = None
 
@@ -78,7 +115,9 @@ async def test_proof_matches_typescript():
                 payer_bytes = log["topics"][1][-20:]  # Last 20 bytes is the address
                 payer = Web3.to_checksum_address(payer_bytes)
             event_block_number = receipt["blockNumber"]
-            print(f"   Found PaymentInitiated event - Payer: {payer}, Block: {event_block_number}")
+            print(
+                f"   Found PaymentInitiated event - Payer: {payer}, Block: {event_block_number}"
+            )
             break
 
     if payer is None and event_block_number is None:
@@ -91,9 +130,10 @@ async def test_proof_matches_typescript():
         rpc_url="http://localhost:8545"
     )  # Dummy URL for ABI-only mode
 
-    # Create ProofManager
+    # Create ProofManager with multi-RPC provider
+    source_provider = MultiRpcProvider([source_rpc])
     proof_manager = ProofManager(
-        w3_source=web3_source,
+        source_provider=source_provider,
         contract_util=contract_util,
         rofl_util=None,  # Testing without ROFL
     )
@@ -216,64 +256,66 @@ def normalize_hex(value):
 
 async def test_proof_generation_errors():
     """
-    Test error handling in proof generation.
+    Test error handling in proof generation with mocked Web3 layer.
+
+    This test verifies that ProofManager properly propagates errors from
+    the RPC layer without making real network connections.
     """
-    print("\n🧪 Testing error handling")
+    # Mock ContractUtility (only needs ABIs)
+    contract_util = ContractUtility(rpc_url="http://localhost:8545")
 
-    # Initialize Web3 connection
-    source_rpc = os.environ.get(
-        "SOURCE_RPC_URL", "https://ethereum-sepolia.publicnode.com"
-    )
-    web3_source = Web3(Web3.HTTPProvider(source_rpc))
+    # Mock MultiRpcProvider to avoid real network connections
+    mock_provider = MagicMock(spec=MultiRpcProvider)
 
-    if not web3_source.is_connected():
-        print("⚠️  Skipping error tests - no connection to source chain")
-        return
-
-    # Initialize ProofManager
-    contract_util = ContractUtility(
-        rpc_url="http://localhost:8545"
-    )  # Dummy URL for ABI-only mode
+    # Create ProofManager with mocked provider
     proof_manager = ProofManager(
-        w3_source=web3_source,
+        source_provider=mock_provider,
         contract_util=contract_util,
-        rofl_util=None,  # Testing without ROFL
+        rofl_util=None,
     )
 
-    # Test with invalid transaction hash
-    print("\n📍 Testing with invalid transaction hash...")
-    try:
-        invalid_event = PaymentEvent(
-            tx_hash="0xinvalid",
-            block_number=0,
-            payer="0x0000000000000000000000000000000000000000",
-            recipient="0x0000000000000000000000000000000000000000",
-            token="0x0000000000000000000000000000000000000000",
-            amount=0,
-        )
+    # Test 1: Invalid transaction hash
+    # Mock execute_with_failover to raise ValueError when w3.eth.get_transaction_receipt is called
+    def mock_invalid_hash_operation(operation):
+        mock_w3 = MagicMock()
+        mock_w3.eth.get_transaction_receipt.side_effect = ValueError("Invalid transaction hash format")
+        return operation(mock_w3)
+
+    mock_provider.execute_with_failover.side_effect = mock_invalid_hash_operation
+
+    invalid_event = PaymentEvent(
+        tx_hash="0xinvalid",
+        block_number=0,
+        payer="0x0000000000000000000000000000000000000000",
+        recipient="0x0000000000000000000000000000000000000000",
+        token="0x0000000000000000000000000000000000000000",
+        amount=0,
+    )
+
+    with pytest.raises(ValueError, match="Invalid transaction hash format"):
         await proof_manager.generate_proof(invalid_event)
-        print("❌ Should have raised an error for invalid hash")
-    except Exception as e:
-        print(f"✅ Correctly raised error: {type(e).__name__}")
 
-    # Test with non-existent transaction
-    print("\n📍 Testing with non-existent transaction...")
-    try:
-        fake_hash = "0x" + "0" * 64
-        fake_event = PaymentEvent(
-            tx_hash=fake_hash,
-            block_number=0,
-            payer="0x0000000000000000000000000000000000000000",
-            recipient="0x0000000000000000000000000000000000000000",
-            token="0x0000000000000000000000000000000000000000",
-            amount=0,
-        )
+    # Test 2: Non-existent transaction
+    # Mock execute_with_failover to raise ValueError for non-existent transaction
+    def mock_nonexistent_tx_operation(operation):
+        mock_w3 = MagicMock()
+        mock_w3.eth.get_transaction_receipt.side_effect = ValueError("Transaction not found")
+        return operation(mock_w3)
+
+    mock_provider.execute_with_failover.side_effect = mock_nonexistent_tx_operation
+
+    fake_hash = "0x" + "0" * 64
+    fake_event = PaymentEvent(
+        tx_hash=fake_hash,
+        block_number=0,
+        payer="0x0000000000000000000000000000000000000000",
+        recipient="0x0000000000000000000000000000000000000000",
+        token="0x0000000000000000000000000000000000000000",
+        amount=0,
+    )
+
+    with pytest.raises(ValueError, match="Transaction not found"):
         await proof_manager.generate_proof(fake_event)
-        print("❌ Should have raised an error for non-existent tx")
-    except Exception as e:
-        print(f"✅ Correctly raised error: {type(e).__name__}")
-
-    print("\n✅ Error handling tests completed")
 
 
 async def main():
